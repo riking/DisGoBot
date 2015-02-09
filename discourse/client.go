@@ -3,12 +3,50 @@ package discourse
 import (
 	"net/url"
 	"fmt"
+	"strconv"
 )
 
+func (bot *DiscourseSite) Subscribe(channel string, callback MessageBusCallback) {
+	bot.messageBus[channel] = -1
+	bot.messageBusCallbacks[channel] = callback
+}
 
+type notificationSubscription struct {
+	callback    NotificationCallback
+	types       []int
+}
+type notifyWPostSubscription struct {
+	callback    NotifyWithPostCallback
+	types       []int
+}
 
-func (d *DiscourseSite) Login(config Config) (err error) {
-	err = d.RefreshCSRF()
+var NotificationTypes = map[string]int {
+	"mentioned": 1,
+	"replied": 2,
+	"quoted": 3,
+	"edited": 4,
+	"liked": 5,
+	"private_message": 6,
+	"invited_to_private_message": 7,
+	"invitee_accepted": 8,
+	"posted": 9,
+	"moved_post": 10,
+	"linked": 11,
+	"granted_badge": 12,
+}
+
+var NotificationTypesInverse map[int]string
+
+func (bot *DiscourseSite) SubscribeNotification(callback NotificationCallback, notifyTypes []int) {
+	bot.notifyCallbacks = append(bot.notifyCallbacks, notificationSubscription{callback, notifyTypes})
+}
+
+func (bot *DiscourseSite) SubscribeNotificationPost(callback NotifyWithPostCallback, notifyTypes []int) {
+	bot.notifyPostCallbacks = append(bot.notifyPostCallbacks, notifyWPostSubscription{callback, notifyTypes})
+}
+
+func (bot *DiscourseSite) Login(config Config) (err error) {
+	err = bot.RefreshCSRF()
 	if err != nil {
 		return
 	}
@@ -18,9 +56,11 @@ func (d *DiscourseSite) Login(config Config) (err error) {
 	loginData.Set("password", config.Password)
 	response := ResponseUserSerializer{}
 
-	err = d.DPostJsonTyped("/session", loginData, &response)
+	err = bot.DPostJsonTyped("/session", loginData, &response)
 	if response.User.Username == config.Username {
 		fmt.Printf("Logged in as %s\n", config.Username)
+		go bot.PollNotifications(response.User.Id)
+
 		return nil
 	}
 	if err != nil {
@@ -31,10 +71,20 @@ func (d *DiscourseSite) Login(config Config) (err error) {
 }
 
 func (d *DiscourseSite) LikePost(postId int) (err error) {
-	d.likeRateLimit <- true
+	//	d.likeRateLimit <- true
 	likeData := url.Values{}
-	likeData.Set("id", fmt.Sprintf("%d", postId))
+	likeData.Set("id", strconv.Itoa(postId))
 	likeData.Set("post_action_type_id", "2")
 	likeData.Set("flag_topic", "false")
 	return d.DPost("/post_actions", likeData)
+}
+
+func (bot *DiscourseSite) ReadPosts(topicId int, posts []int) error {
+	data := url.Values{}
+	data.Set("topic_id", strconv.Itoa(topicId))
+	data.Set("topic_time", "4242")
+	for _, postId := range posts {
+		data.Set(fmt.Sprintf("timings[%d]", postId), "4242")
+	}
+	return bot.DPost("/topics/timings", data)
 }

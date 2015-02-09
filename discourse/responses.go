@@ -1,5 +1,9 @@
 package discourse
 
+import "time"
+
+const timeLayout = "2015-02-09 03:05:56 +0000"
+
 type S_BasicUser struct {
 	Id                 int
 	Username           string
@@ -114,10 +118,14 @@ type S_Notification struct {
 	Notification_type int
 	Read              bool
 	Created_at        string
+	Created_at_ts     time.Time
 	Post_number       int
 	Topic_id          int
 	Slug              string
 	Data              map[string]interface{}
+}
+func (s S_Notification) ParseTimes() {
+	s.Created_at_ts, _ = time.Parse(timeLayout, s.Created_at)
 }
 type S_PostAction struct {
 	Id      int
@@ -274,6 +282,12 @@ type S_TopicResponse struct {
 	Word_count            int
 	Deleted_at            string
 }
+type S_MessageBus struct {
+	Global_Id  int
+	Message_Id int
+	Channel    string
+	Data       map[string]interface{}
+}
 
 type ResponseUserSerializer struct {
 	User_badges []S_UserBadge
@@ -304,3 +318,5 @@ type ResponseTopic struct {
 	Chunk_size            int
 	Bookmarked            bool
 }
+type ResponseMessageBus []S_MessageBus
+type ResponseNotifications []S_Notification

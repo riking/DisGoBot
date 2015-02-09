@@ -7,6 +7,8 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"time"
+	"crypto/rand"
+	"encoding/hex"
 )
 
 type Config struct {
@@ -20,6 +22,11 @@ type Config struct {
 func init() {
 	var dummyJar cookiejar.Jar
 	gob.Register(dummyJar)
+
+	NotificationTypesInverse = make(map[int]string)
+	for k, v := range NotificationTypes {
+		NotificationTypesInverse[v] = k
+	}
 }
 
 // DiscourseSite
@@ -28,11 +35,18 @@ type DiscourseSite struct {
 	baseUrl       string
 	name          string
 	cookieJar     *cookiejar.Jar
-	rateLimit     chan *http.Request
-	likeRateLimit chan bool
 	httpClient    http.Client
+	clientId      string
+	csrfToken     string
 
-	csrfToken string
+	rateLimit        chan *http.Request
+	likeRateLimit    chan bool
+	onNotification   chan bool
+
+	messageBus            map[string]int
+	messageBusCallbacks   map[string]MessageBusCallback
+	notifyCallbacks       []notificationSubscription
+	notifyPostCallbacks   []notifyWPostSubscription
 }
 
 func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
@@ -41,10 +55,18 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot.baseUrl = config.Url
 	bot.name = config.BotName
 	bot.cookieJar, err = cookiejar.New(nil)
+	bot.httpClient.Jar = bot.cookieJar
+
 	bot.rateLimit = make(chan *http.Request)
 	bot.likeRateLimit = make(chan bool)
+	bot.onNotification = make(chan bool)
+
+	bot.messageBus = make(map[string]int)
+	bot.messageBusCallbacks = make(map[string]MessageBusCallback)
+	bot.clientId = uuid()
 
 	err = bot.loadCookies()
+
 	// Feed ratelimit
 	go func() {
 		for {
@@ -55,16 +77,29 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	}()
 	go func() {
 		for {
-			for i := 0; i < (500 / 24); i++ {
+			for i := 0; i < (500/24); i++ {
 				<-bot.likeRateLimit
 			}
 			fmt.Println("Exhausted hourly like limit")
 			time.Sleep(1 * time.Hour)
 		}
 	}()
-	bot.httpClient.Jar = bot.cookieJar
+
+	go bot.PollMessageBus()
 
 	return
+}
+
+func uuid() string {
+	u := make([]byte, 16)
+	_, err := rand.Read(u)
+	if err != nil {
+		return "123456789abcdef"
+	}
+
+	u[8] = (u[8]|0x80)&0xBF
+	u[6] = (u[6]|0x40)&0x4F
+	return hex.EncodeToString(u)
 }
 
 func (d *DiscourseSite) cookieFile() string {

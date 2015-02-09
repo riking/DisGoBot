@@ -188,29 +188,13 @@ func (d *DiscourseSite) decodeJsonTyped(request *http.Request, target interface{
 		return ErrorBadCsrf(false)
 	}
 
+	err = CheckForError(resp, buf)
+	if err != nil {
+		return err
+	}
 	marshErr := json.Unmarshal(buf, target)
 	if marshErr != nil {
-		if resp.StatusCode >= 400 {
-			// TODO - special behavior for some of these?
-			switch(resp.StatusCode) {
-			case 403:
-				return ErrorPermissions(false)
-			case 404:
-				return ErrorNotFound(false)
-			case 405:
-				return ErrorReadOnly(false)
-			case 429:
-				return ErrorRateLimit{asString}
-			}
-			var dError ErrorWithJSON
-			marshErr2 := json.Unmarshal(buf, dError)
-			if marshErr2 == nil {
-				return dError
-			}
-			return ErrorStatusCode(resp.StatusCode)
-		} else {
-			return ErrorBadJsonType{marshErr, asString}
-		}
+		return ErrorBadJsonType{marshErr, asString}
 	}
 	return nil
 }
@@ -229,7 +213,16 @@ func (d *DiscourseSite) DPost(url string, data url.Values) (err error) {
 	}
 	req.Header["Accept"] = []string{"application/json, text/javascript"}
 
-	_, err = d.do(req)
+	resp, err := d.do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	err = CheckForError(resp, buf)
 	return
 }
 
@@ -242,4 +235,27 @@ func (d *DiscourseSite) DPostJsonTyped(url string, data url.Values, target inter
 
 	err = d.decodeJsonTyped(req, target)
 	return
+}
+
+func CheckForError(resp *http.Response, body []byte) (err error) {
+	if resp.StatusCode >= 400 {
+		// TODO - special behavior for some of these?
+		switch(resp.StatusCode) {
+		case 403:
+			return ErrorPermissions(false)
+		case 404:
+			return ErrorNotFound(false)
+		case 405:
+			return ErrorReadOnly(false)
+		case 429:
+			return ErrorRateLimit{string(body)}
+		}
+		var dError ErrorWithJSON
+		marshErr2 := json.Unmarshal(body, dError)
+		if marshErr2 == nil {
+			return dError
+		}
+		return ErrorStatusCode(resp.StatusCode)
+	}
+	return nil
 }

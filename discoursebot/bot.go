@@ -55,9 +55,14 @@ func main() {
 
 	go LikesThread(bot)
 	go GiveOutNicePosts(bot)
-
+	bot.SubscribeNotificationPost(OnNotifiedPost, []int{1,2,3,4,5,6,7,8,9,10,11,12})
 
 	time.Sleep(9 * time.Hour)
+}
+
+func OnNotifiedPost(notification discourse.S_Notification, post discourse.S_Post, bot *discourse.DiscourseSite) () {
+	fmt.Println("Got notification of type", discourse.NotificationTypesInverse[notification.Notification_type])
+	fmt.Println("Post is id", post.Id)
 }
 
 func GiveOutNicePosts(bot *discourse.DiscourseSite) {
@@ -89,7 +94,7 @@ func GiveOutNicePosts(bot *discourse.DiscourseSite) {
 		}
 	}
 	func() {
-		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 192732);
+		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 188682);
 		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 0);
 	}()
 }
