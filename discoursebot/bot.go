@@ -10,6 +10,7 @@ import (
 	"github.com/riking/discourse/discourse"
 	"fmt"
 	"time"
+	"regexp"
 	//	"reflect"
 )
 
@@ -53,8 +54,16 @@ func main() {
 	bot, _ := setup()
 
 	go LikesThread(bot)
+	go GiveOutNicePosts(bot)
 
+
+	time.Sleep(9 * time.Hour)
+}
+
+func GiveOutNicePosts(bot *discourse.DiscourseSite) {
 	var highestSeen int = 0
+	regex := regexp.MustCompile("(?i)purple")
+
 	likePosts := func(post discourse.S_Post) {
 		var err error
 		if post.Like_count >= 9 && post.Like_count < 10 {
@@ -68,31 +77,45 @@ func main() {
 				panic(err)
 			}
 		}
+		if regex.MatchString(post.Raw) {
+			err = bot.LikePost(post.Id)
+			fmt.Println("Liked purple post with id", post.Id)
+			if _, ok := err.(discourse.ErrorRateLimit); ok {
+				fmt.Println("Reached rate limit, sleeping 1 hour")
+				time.Sleep(1 * time.Hour)
+			} else if err != nil {
+				panic(err)
+			}
+		}
 	}
-	go func() {
-		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 208882);
+	func() {
+		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 192732);
 		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 0);
 	}()
-
-	time.Sleep(9 * time.Hour)
 }
 
 func LikesThread(bot *discourse.DiscourseSite) {
+	return
 	var response discourse.ResponseTopic
 	err := bot.DGetJsonTyped("/t/1000.json", &response)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-//	var highestLikedPost int = 12803
-	var highestLikedPostNumber int = 9
+	var highestLikedPost int = 12900
+	var highestLikedPostNumber int = 100
 	for idx, postId := range response.Post_stream.Stream {
 		if idx < highestLikedPostNumber {
 			continue
 		}
+		if postId < highestLikedPost {
+			continue
+		}
 		highestLikedPostNumber = idx
+		highestLikedPost = postId
 		err = bot.LikePost(postId)
-		fmt.Println("Liked post id", postId, "in Likes thread")
+		fmt.Println("Liked post id", postId, "in Likes thread (#", idx, ")")
+		time.Sleep(200 * time.Millisecond)
 
 		if _, ok := err.(discourse.ErrorRateLimit); ok {
 			fmt.Println("Reached rate limit, sleeping 1 hour")

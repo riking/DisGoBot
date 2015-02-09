@@ -31,6 +31,7 @@ func (d *DiscourseSite) Login(config Config) (err error) {
 }
 
 func (d *DiscourseSite) LikePost(postId int) (err error) {
+	d.likeRateLimit <- true
 	likeData := url.Values{}
 	likeData.Set("id", fmt.Sprintf("%d", postId))
 	likeData.Set("post_action_type_id", "2")
