@@ -2,8 +2,6 @@ package discourse
 
 import "time"
 
-const timeLayout = "2015-02-09 03:05:56 +0000"
-
 type S_BasicUser struct {
 	Id                 int
 	Username           string
@@ -124,8 +122,12 @@ type S_Notification struct {
 	Slug              string
 	Data              map[string]interface{}
 }
-func (s S_Notification) ParseTimes() {
-	s.Created_at_ts, _ = time.Parse(timeLayout, s.Created_at)
+func (s *S_Notification) ParseTimes() {
+	ts, err := time.Parse(time.RFC3339, s.Created_at)
+	if err != nil {
+		panic(err)
+	}
+	s.Created_at_ts = ts
 }
 type S_PostAction struct {
 	Id      int

@@ -58,7 +58,7 @@ func (bot *DiscourseSite) Login(config Config) (err error) {
 
 	err = bot.DPostJsonTyped("/session", loginData, &response)
 	if response.User.Username == config.Username {
-		fmt.Printf("Logged in as %s\n", config.Username)
+		fmt.Printf("[INFO] Logged in as %s\n", config.Username)
 		go bot.PollNotifications(response.User.Id)
 
 		return nil

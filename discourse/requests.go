@@ -55,7 +55,7 @@ func (e ErrorWithJSON) Error() string {
 	return fmt.Sprintf("Server returned status code %d: %s", e.Status, jsonString)
 }
 func (e ErrorRateLimit) Error() string {
-	return "Rate limit exceeded"
+	return fmt.Sprintf("Rate limit exceeded: %s", e.string)
 }
 func (e ErrorPermissions) Error() string {
 	return "Invalid access"
@@ -151,6 +151,11 @@ func (d *DiscourseSite) makeRequestPost(url string, data url.Values) (req *http.
 	addHeaders(d, req)
 	return req, err
 }
+func (d *DiscourseSite) makeRequestPut(url string, data string) (req *http.Request, err error) {
+	req, err = http.NewRequest("PUT", d.addBase(url), bytes.NewBufferString(data))
+	addHeaders(d, req)
+	return req, err
+}
 
 var haltRecursion = false
 
@@ -212,6 +217,25 @@ func (d *DiscourseSite) DPost(url string, data url.Values) (err error) {
 		return err
 	}
 	req.Header["Accept"] = []string{"application/json, text/javascript"}
+
+	resp, err := d.do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	err = CheckForError(resp, buf)
+	return
+}
+
+func (d *DiscourseSite) DPut(url string, data string) (err error) {
+	req, err := d.makeRequestPut(url, data)
+	if err != nil {
+		return err
+	}
 
 	resp, err := d.do(req)
 	if err != nil {

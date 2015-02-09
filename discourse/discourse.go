@@ -49,6 +49,8 @@ type DiscourseSite struct {
 	notifyPostCallbacks   []notifyWPostSubscription
 }
 
+var OnNotification chan bool
+
 func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot = new(DiscourseSite)
 
@@ -60,6 +62,7 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot.rateLimit = make(chan *http.Request)
 	bot.likeRateLimit = make(chan bool)
 	bot.onNotification = make(chan bool)
+	OnNotification = bot.onNotification
 
 	bot.messageBus = make(map[string]int)
 	bot.messageBusCallbacks = make(map[string]MessageBusCallback)
@@ -72,7 +75,7 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 		for {
 			time.Sleep(1 * time.Second)
 			req := <-bot.rateLimit
-			fmt.Printf("Made request to %s\n", req.URL)
+			fmt.Printf("[INFO] Made request to %s\n", req.URL)
 		}
 	}()
 	go func() {
@@ -80,7 +83,7 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 			for i := 0; i < (500/24); i++ {
 				<-bot.likeRateLimit
 			}
-			fmt.Println("Exhausted hourly like limit")
+			fmt.Println("[WARN]", "Exhausted hourly like limit")
 			time.Sleep(1 * time.Hour)
 		}
 	}()

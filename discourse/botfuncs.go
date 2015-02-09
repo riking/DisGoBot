@@ -39,6 +39,11 @@ func (bot *DiscourseSite) PollMessageBus() {
 		}
 	}()
 
+	// Wait for registrations
+	for len(bot.messageBus) == 0 {
+		time.Sleep(1 * time.Second)
+	}
+
 	for {
 		// Set up form data
 		for channel, pos := range bot.messageBus {
@@ -52,10 +57,12 @@ func (bot *DiscourseSite) PollMessageBus() {
 			time.Sleep(60 * time.Second)
 		}
 
+		fmt.Println("[INFO]", "Message bus response", response)
 		// Dump into channel
 		for _, msg := range response {
 			messageChan <- msg
 		}
+		time.Sleep(3 * time.Second)
 	}
 }
 
@@ -78,7 +85,7 @@ func contains(s []int, e int) bool {
 type ByCreatedAt ResponseNotifications
 func (r ByCreatedAt) Len() int      { return len(r) }
 func (r ByCreatedAt) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
-func (r ByCreatedAt) Less(i, j int) bool {
+func (r ByCreatedAt) Less(j, i int) bool {
 	return r[i].Created_at_ts.Before(r[j].Created_at_ts)
 }
 
@@ -94,21 +101,21 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 
 	for {
 		<-bot.onNotification
-		fmt.Println("fetching notifications")
-		err := bot.DGetJsonTyped("/notifications/history.json", &response)
+		fmt.Println("[INFO]", "Fetching notifications")
+		err := bot.DGetJsonTyped("/notifications.json", &response)
 		if err != nil {
-			fmt.Println("Notifications error!", err)
+			fmt.Println("[ERR]", "Notifications error!", err)
 			time.Sleep(60 * time.Second)
 			continue
 		}
-		fmt.Println("Found", len(response), "notifications")
 
 		// Sort by created_at to fix problems with bubbled notifications
-		for _, n := range response {
-			n.ParseTimes()
+		for idx, _ := range response {
+			response[idx].ParseTimes()
 		}
 		sort.Sort(ByCreatedAt(response))
 
+		processedNum := 0
 		for _, notification := range response {
 			if notification.Read {
 				continue
@@ -119,7 +126,8 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 			if notification.Created_at_ts.After(newLastSeen) {
 				newLastSeen = notification.Created_at_ts
 			}
-			fmt.Println("Processing notification at", notification.Created_at_ts)
+			fmt.Println("[INFO]", "Processing notification at", notification.Created_at_ts)
+			processedNum = processedNum + 1
 
 			notifyType := notification.Notification_type
 
@@ -133,10 +141,10 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 			// If the notification is assosciated with a post
 			if notification.Topic_id > 0 {
 				if len(bot.notifyPostCallbacks) > 0 {
-					fmt.Println("Fetching post ", notification.Topic_id, notification.Post_number, "from notification")
+					fmt.Println("[INFO]", "Fetching post ", notification.Topic_id, notification.Post_number, "from notification")
 					err = bot.DGetJsonTyped(fmt.Sprintf("/posts/by_number/%d/%d.json", notification.Topic_id, notification.Post_number), &post)
 					if err != nil {
-						fmt.Println("Notifications error!", err)
+						fmt.Println("[ERR]", "Notifications error!", err)
 						time.Sleep(60 * time.Second)
 					} else {
 						for _, handler := range bot.notifyPostCallbacks {
@@ -146,10 +154,18 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 						}
 					}
 				}
-				bot.ReadPosts(notification.Topic_id, []int{notification.Post_number})
 			}
 		}
 		lastSeen = newLastSeen
+
+		fmt.Println("[INFO]", "Processed", processedNum, "notifications")
+		// Mark all as read and ignore one message
+		err = bot.DPut("/notifications/reset-new", "")
+		if err != nil {
+			fmt.Println("[ERR]", "Notifications error!", "reset-new", err)
+		}
+		<-bot.onNotification
+
 		time.Sleep(2 * time.Second)
 	}
 }
@@ -173,14 +189,13 @@ func SeeEveryPost(bot *DiscourseSite, highestSeen *int, callback SeeEveryPostCal
 
 		err := bot.DGetJsonTyped(request, &posts)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("[ERR]", err)
 			return
 		}
 
 
 		for _, post := range posts.Latest_posts {
 			if post.Id < lowestId && post.Id > *highestSeen {
-				//				fmt.Println(post.Id)
 				callback(post)
 			}
 			if post.Id > myHighest {
