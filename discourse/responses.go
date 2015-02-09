@@ -170,6 +170,110 @@ type S_Post struct {
 	Can_view_edit_history bool
 	Wiki                  bool
 }
+type S_PostStream struct {
+	Posts  []S_Post
+	Stream []int
+}
+type S_TopicParticipant struct {
+	S_BasicUser
+	Post_count int
+}
+type S_BasicTopic struct {
+	Id                int
+	Title             string
+	Fancy_title       string
+	Slug              string
+	Posts_count       int
+}
+type S_ListedTopic struct {
+	S_BasicTopic
+	Reply_count           int
+	Highest_post_number   int
+	Image_url             string
+	Created_at            string
+	Bumped                bool
+	Bumped_at             string
+	Unseen                bool
+	Last_read_post_number int
+	Unread                int
+	New_posts             int
+	Pinned                bool
+	Unpinned              bool
+	Visible               bool
+	Closed                bool
+	Archived              bool
+	Notification_level    int
+	Bookmarked            bool
+	Liked                 bool
+}
+type S_SuggestedTopic struct {
+	S_ListedTopic
+	Archetype   string
+	Like_count  int
+	Views       int
+	Category_id int
+}
+type S_TopicListPoster struct {
+	Extras      string
+	Description string
+	User_id     int
+}
+type S_TopicListItem struct {
+	S_ListedTopic
+	Views                int
+	Like_count           int
+	Has_summary          bool
+	Archetype            string
+	Last_poster_username string
+	Category_id          int
+	Pinned_globally      bool
+	Posters              []S_TopicListPoster
+}
+type S_TopicLink struct {
+	Url         string
+	Title       string
+	Fancy_title string
+	Internal    bool
+	Reflection  bool
+	Clicks      int
+	User_id     int
+	Domain      string
+}
+type S_TopicDetails struct {
+	Auto_close_at                 string
+	Auto_close_hours              float64
+	Auto_close_based_on_last_post bool
+	Created_by                    S_BasicUser
+	Last_posted                   S_BasicUser
+	Participants                  []S_TopicParticipant
+	Suggested_topics              []S_SuggestedTopic
+	Links                         []S_TopicLink
+	Notification_level            int
+	Notifications_reason_id       int
+	Can_edit                      bool
+	Can_reply_as_new_topic        bool
+	Can_flag_topic                bool
+}
+type S_TopicResponse struct {
+	S_BasicTopic
+	Created_at            string
+	Views                 int
+	Reply_count           int
+	Image_url             string
+	Highest_post_number   int
+	Last_read_post_number int
+	Participant_count     int
+	Last_posted_at        string
+	Like_count            int
+	Visible               bool
+	Closed                bool
+	Archived              bool
+	Has_summary           bool
+	Archetype             string
+	Category_id           int
+	Word_count            int
+	Deleted_at            string
+}
 
 type ResponseUserSerializer struct {
 	User_badges []S_UserBadge
@@ -180,4 +284,23 @@ type ResponseUserSerializer struct {
 }
 type ResponseLatestPosts struct {
 	Latest_posts []S_Post
+}
+type ResponseTopic struct {
+	Post_stream S_PostStream
+	S_TopicResponse
+	//	Draft ? what type
+	Draft_key             string
+	Draft_sequence        int
+	Posted                bool
+	Unpinned              bool
+	Pinned_globally       bool
+	Pinned                bool
+	Pinned_at             string
+	Details               S_TopicDetails
+	Highest_post_number   int
+	Last_read_post_number int
+	Deleted_by            int
+	Actions_summary       []S_PostAction
+	Chunk_size            int
+	Bookmarked            bool
 }

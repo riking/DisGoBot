@@ -23,8 +23,8 @@ type ResponseGenericError struct {
 
 // Error types
 type ErrorWithJSON struct {
-	status int
-	json map[string]interface{}
+	Status int
+	Json map[string]interface{}
 }
 type ErrorRateLimit struct {
 	string   string
@@ -36,8 +36,8 @@ type ErrorBadCsrf bool
 type ErrorStatusCode int
 type ErrorEmptyResponse bool
 type ErrorBadJsonType struct {
-	child error
-	json string
+	Child error
+	Json string
 }
 
 func (e ResponseGenericError) Error() string {
@@ -46,13 +46,13 @@ func (e ResponseGenericError) Error() string {
 func (e ErrorWithJSON) Error() string {
 	var b bytes.Buffer
 	enc := json.NewEncoder(&b)
-	enc.Encode(e.json)
+	enc.Encode(e.Json)
 	jsonString := b.String()
 	// Truncate the string
 	if len(jsonString) > 200 {
 		jsonString = jsonString[:200]
 	}
-	return fmt.Sprintf("Server returned status code %d: %s", e.status, jsonString)
+	return fmt.Sprintf("Server returned status code %d: %s", e.Status, jsonString)
 }
 func (e ErrorRateLimit) Error() string {
 	return "Rate limit exceeded"
@@ -70,7 +70,7 @@ func (e ErrorBadCsrf) Error() string {
 	return "Server responded with Bad CSRF error"
 }
 func (e ErrorBadJsonType) Error() string {
-	return fmt.Sprintf("Bad json type: %s\nJson: %s", e.child.Error(), e.json)
+	return fmt.Sprintf("Bad json type: %s\nJson: %s", e.Child.Error(), e.Json)
 }
 func (e ErrorStatusCode) Error() string {
 	return fmt.Sprintf("Server returned status code %d", e)
@@ -132,7 +132,7 @@ func (d *DiscourseSite) RefreshCSRF() (err error) {
 	var csrf ResponseCSRF
 	err = json.Unmarshal(buf, &csrf)
 	if err != nil {
-		fmt.Println("getting csrf", err, buf)
+		fmt.Println("error getting csrf", err, buf)
 		return err
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/riking/discourse/discourse"
 	"fmt"
 	"time"
+	//	"reflect"
 )
 
 var configFile string
@@ -43,7 +44,7 @@ func setup() (bot *discourse.DiscourseSite, config discourse.Config) {
 	return bot, config
 }
 
-var bot discourse.DiscourseSite
+var bot *discourse.DiscourseSite
 
 func main() {
 	fmt.Println("Starting up...")
@@ -51,21 +52,53 @@ func main() {
 
 	bot, _ := setup()
 
+	go LikesThread(bot)
+
 	var highestSeen int = 0
-	likePosts := func (post discourse.S_Post) {
+	likePosts := func(post discourse.S_Post) {
 		var err error
-		if post.Like_count >= 7 && post.Like_count < 10 {
-			fmt.Println("Post id", post.Id, "has", post.Like_count, "likes - liking")
+		if post.Like_count >= 9 && post.Like_count < 10 {
 			err = bot.LikePost(post.Id)
-			if err != nil {
+			fmt.Println("Liked post id", post.Id, "which had", post.Like_count, "likes")
+
+			if _, ok := err.(discourse.ErrorRateLimit); ok {
+				fmt.Println("Reached rate limit, sleeping 1 hour")
+				time.Sleep(1 * time.Hour)
+			} else if err != nil {
 				panic(err)
 			}
 		}
 	}
-	discourse.SeeEveryPost(bot, &highestSeen, likePosts, 224382);
-	discourse.SeeEveryPost(bot, &highestSeen, likePosts, 0);
+	go func() {
+		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 208882);
+		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 0);
+	}()
 
-	time.Sleep(0)
+	time.Sleep(9 * time.Hour)
 }
 
+func LikesThread(bot *discourse.DiscourseSite) {
+	var response discourse.ResponseTopic
+	err := bot.DGetJsonTyped("/t/1000.json", &response)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+//	var highestLikedPost int = 12803
+	var highestLikedPostNumber int = 9
+	for idx, postId := range response.Post_stream.Stream {
+		if idx < highestLikedPostNumber {
+			continue
+		}
+		highestLikedPostNumber = idx
+		err = bot.LikePost(postId)
+		fmt.Println("Liked post id", postId, "in Likes thread")
 
+		if _, ok := err.(discourse.ErrorRateLimit); ok {
+			fmt.Println("Reached rate limit, sleeping 1 hour")
+			time.Sleep(1 * time.Hour)
+		} else if err != nil {
+			panic(err)
+		}
+	}
+}
