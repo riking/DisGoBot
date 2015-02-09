@@ -20,6 +20,21 @@ type notifyWPostSubscription struct {
 	types       []int
 }
 
+const (
+	NotificationMentioned = iota
+	NotificationReplied
+	NotificationQuoted
+	NotificationEdited
+	NotificationLiked
+	NotificationPrivateMessage
+	NotificationPMInvite
+	NotificationInviteAccepted
+	NotificationPosted
+	NotificationMovedPost
+	NotificationLinked
+	NotificationGrantedBadge
+)
+
 var NotificationTypes = map[string]int {
 	"mentioned": 1,
 	"replied": 2,

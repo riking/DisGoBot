@@ -74,7 +74,9 @@ func updateChannels(msg S_MessageBus, bot *DiscourseSite) {
 }
 
 func notificationsChannel(msg S_MessageBus, bot *DiscourseSite) {
-	bot.onNotification <- true
+	if msg.Data["total_unread_notifications"].(float64) > 0 {
+		bot.onNotification <- true
+	}
 }
 
 func contains(s []int, e int) bool {
@@ -115,6 +117,22 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 		}
 		sort.Sort(ByCreatedAt(response))
 
+		toProcessCount := 0
+		for _, n := range response {
+			if !n.Read {
+				toProcessCount++
+			}
+		}
+
+		fmt.Println("[INFO]", "Got", toProcessCount, "notifications to process")
+		// Mark all as read and ignore the reflection updates
+		if toProcessCount > 0 {
+			err = bot.DPut("/notifications/reset-new", "")
+			if err != nil {
+				fmt.Println("[ERR]", "Notifications error!", "reset-new", err)
+			}
+		}
+
 		processedNum := 0
 		for _, notification := range response {
 			if notification.Read {
@@ -127,7 +145,7 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 				newLastSeen = notification.Created_at_ts
 			}
 			fmt.Println("[INFO]", "Processing notification at", notification.Created_at_ts)
-			processedNum = processedNum + 1
+			processedNum++
 
 			notifyType := notification.Notification_type
 
@@ -158,13 +176,7 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 		}
 		lastSeen = newLastSeen
 
-		fmt.Println("[INFO]", "Processed", processedNum, "notifications")
-		// Mark all as read and ignore one message
-		err = bot.DPut("/notifications/reset-new", "")
-		if err != nil {
-			fmt.Println("[ERR]", "Notifications error!", "reset-new", err)
-		}
-		<-bot.onNotification
+		fmt.Println("[INFO]", "Finished processing", processedNum, "notifications")
 
 		time.Sleep(2 * time.Second)
 	}

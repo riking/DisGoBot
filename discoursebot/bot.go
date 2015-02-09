@@ -53,8 +53,9 @@ func main() {
 
 	bot, _ := setup()
 
-	go LikesThread(bot)
-	go GiveOutNicePosts(bot)
+//	go LikesThread(bot)
+//	go GiveOutNicePosts(bot)
+	bot.SubscribeNotificationPost(LikeSummon, []int{1})
 	bot.SubscribeNotificationPost(OnNotifiedPost, []int{1,2,3,4,5,6,7,8,9,10,11,12})
 
 	discourse.OnNotification <- true
@@ -65,6 +66,26 @@ func main() {
 func OnNotifiedPost(notification discourse.S_Notification, post discourse.S_Post, bot *discourse.DiscourseSite) () {
 	fmt.Println("[INFO]", "Got notification of type", discourse.NotificationTypesInverse[notification.Notification_type])
 	fmt.Println("[INFO]", "Post is id", post.Id)
+	// TODO do something ?
+}
+
+func LikeSummon(notification discourse.S_Notification, post discourse.S_Post, bot *discourse.DiscourseSite) {
+	fmt.Println("LikeSummon got notification")
+	if post.Reply_to_post_number > 0 {
+		fmt.Println("liking post it is reply to")
+
+		var postToLike discourse.S_Post
+		err := bot.DGetJsonTyped(fmt.Sprintf("/posts/by_number/%d/%d", post.Topic_id, post.Reply_to_post_number), &postToLike)
+		if err != nil {
+			fmt.Println("[ERR]", "LikeSummon - failed to load post", err)
+			return
+		}
+		err = bot.LikePost(postToLike.Id)
+		if err != nil {
+			fmt.Println("[ERR]", "LikeSummon - liking post", err)
+			return
+		}
+	}
 }
 
 func GiveOutNicePosts(bot *discourse.DiscourseSite) {
