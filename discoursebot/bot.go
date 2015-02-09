@@ -3,12 +3,13 @@ package main
 import (
 	"flag"
 	"io/ioutil"
-	"log"
 	"os"
 
 	"encoding/json"
 
 	"github.com/riking/discourse/discourse"
+	"fmt"
+	"time"
 )
 
 var configFile string
@@ -17,25 +18,54 @@ func init() {
 	flag.StringVar(&configFile, "config", "config.json", "configuration file to load")
 }
 
-func fatal(err error) {
+func fatal(desc string, err error) {
 	if err != nil {
-		log.Fatalln(err)
+		fmt.Println("Fatal: ", desc, err)
+		panic(err)
 	}
 }
 
-func setup() {
+func setup() (bot *discourse.DiscourseSite, config discourse.Config) {
 	file, err := os.Open(configFile)
-	fatal(err)
+	fatal("open config", err)
 	jsonBlob, err := ioutil.ReadAll(file)
-	fatal(err)
+	fatal("read config", err)
 
-	var config discourse.Config
 	err = json.Unmarshal(jsonBlob, &config)
-	fatal(err)
+	fatal("parse config", err)
+
+	bot, err = discourse.NewDiscourseSite(config)
+	fatal("setting up bot", err)
+
+	err = bot.Login(config)
+	fatal("logging in", err)
+
+	return bot, config
 }
+
+var bot discourse.DiscourseSite
 
 func main() {
-	log.Println("Starting up...")
+	fmt.Println("Starting up...")
 	flag.Parse()
 
+	bot, _ := setup()
+
+	var highestSeen int = 0
+	likePosts := func (post discourse.S_Post) {
+		var err error
+		if post.Like_count >= 7 && post.Like_count < 10 {
+			fmt.Println("Post id", post.Id, "has", post.Like_count, "likes - liking")
+			err = bot.LikePost(post.Id)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	discourse.SeeEveryPost(bot, &highestSeen, likePosts, 224382);
+	discourse.SeeEveryPost(bot, &highestSeen, likePosts, 0);
+
+	time.Sleep(0)
 }
+
+

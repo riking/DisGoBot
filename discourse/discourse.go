@@ -3,14 +3,18 @@ package discourse
 import (
 	"encoding/gob"
 	"fmt"
-	//	"net/http"
+	"net/http"
 	"net/http/cookiejar"
 	"os"
+	"time"
 )
 
 type Config struct {
 	Url       string
 	BotName   string
+
+	Username  string
+	Password  string
 }
 
 func init() {
@@ -23,14 +27,31 @@ func init() {
 type DiscourseSite struct {
 	baseUrl       string
 	name          string
-	cookieJar     cookiejar.Jar
+	cookieJar     *cookiejar.Jar
+	rateLimit     chan *http.Request
+	httpClient    http.Client
+
+	csrfToken string
 }
 
 func NewDiscourseSite(config Config) (ret *DiscourseSite, err error) {
 	ret = new(DiscourseSite)
+
 	ret.baseUrl = config.Url
 	ret.name = config.BotName
+	ret.cookieJar, err = cookiejar.New(nil)
+	ret.rateLimit = make(chan *http.Request)
+
 	err = ret.loadCookies()
+	// Feed ratelimit
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			req := <-ret.rateLimit
+			fmt.Printf("Made request to %s\n", req.URL)
+		}
+	}()
+	ret.httpClient.Jar = ret.cookieJar
 
 	return
 }
@@ -43,13 +64,12 @@ func (d *DiscourseSite) loadCookies() error {
 	filename := d.cookieFile()
 	file, err := os.Open(filename)
 	if err != nil {
-		// Make empty cookies file
-		if file, err = os.Create(filename); err != nil {
-			return err
-		}
-		return d.saveCookies()
+		file.Close()
+		// cookies are empty, first run
+		return nil
 	}
 	// Load cookies
+	defer file.Close()
 	dec := gob.NewDecoder(file)
 	return dec.Decode(&d.cookieJar)
 }
@@ -58,17 +78,11 @@ func (d *DiscourseSite) saveCookies() error {
 	filename := d.cookieFile()
 	file, err := os.Open(filename)
 	if err != nil {
+		fmt.Println("saveCookies() open error")
 		return err
 	}
 	enc := gob.NewEncoder(file)
-	return enc.Encode(d.cookieJar)
+	err = enc.Encode(d.cookieJar)
+	fmt.Println("encode error", err)
+	return nil
 }
-
-func (d *DiscourseSite) DGet(url string) {
-
-}
-
-func (d *DiscourseSite) EGet(url string) {
-
-}
-
