@@ -59,6 +59,7 @@ func main() {
 
 	discourse.OnNotification <- true
 	time.Sleep(9 * time.Hour)
+	// TODO - command line control
 }
 
 func OnNotifiedPost(notification discourse.S_Notification, post discourse.S_Post, bot *discourse.DiscourseSite) () {
