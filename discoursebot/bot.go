@@ -94,7 +94,7 @@ func GiveOutNicePosts(bot *discourse.DiscourseSite) {
 
 	likePosts := func(post discourse.S_Post) {
 		var err error
-		if post.Like_count >= 9 && post.Like_count < 10 {
+		if post.Like_count == 9 {
 			err = bot.LikePost(post.Id)
 			fmt.Println("[INFO]", "Liked post id", post.Id, "which had", post.Like_count, "likes")
 
@@ -116,9 +116,14 @@ func GiveOutNicePosts(bot *discourse.DiscourseSite) {
 			}
 		}
 	}
+
+	// highestSeen = SOME_VALUE // load from persistent store?
 	func() {
 		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 188682);
-		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 0);
+		for {
+			discourse.SeeEveryPost(bot, &highestSeen, likePosts, 0);
+			time.Sleep(15 * time.Minute)
+		}
 	}()
 }
 
