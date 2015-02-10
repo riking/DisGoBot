@@ -4,6 +4,8 @@ import (
 	"net/url"
 	"fmt"
 	"strconv"
+
+	log "github.com/riking/DisGoBot/logging"
 )
 
 func (bot *DiscourseSite) Subscribe(channel string, callback MessageBusCallback) {
@@ -63,6 +65,8 @@ func (bot *DiscourseSite) SubscribeNotificationPost(callback NotifyWithPostCallb
 
 
 func (bot *DiscourseSite) Login(config Config) (err error) {
+	// TODO get /session/current.json
+	// 404 = logged out, 200 = logged in
 	err = bot.RefreshCSRF()
 	if err != nil {
 		return
@@ -75,7 +79,7 @@ func (bot *DiscourseSite) Login(config Config) (err error) {
 
 	err = bot.DPostJsonTyped("/session", loginData, &response)
 	if response.User.Username == config.Username {
-		fmt.Printf("[INFO] Logged in as %s\n", config.Username)
+		log.Info("Logged in as", config.Username)
 		go bot.PollNotifications(response.User.Id)
 
 		return nil

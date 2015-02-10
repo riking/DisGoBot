@@ -7,7 +7,8 @@ import (
 
 	"encoding/json"
 
-	"github.com/riking/discourse/discourse"
+	"github.com/riking/DisGoBot/discourse"
+	log "github.com/riking/DisGoBot/logging"
 	"fmt"
 	"time"
 	"regexp"
@@ -22,7 +23,7 @@ func init() {
 
 func fatal(desc string, err error) {
 	if err != nil {
-		fmt.Println("[ERR]", desc, err)
+		log.Error(desc, err)
 		panic(err)
 	}
 }
@@ -48,7 +49,7 @@ func setup() (bot *discourse.DiscourseSite, config discourse.Config) {
 var bot *discourse.DiscourseSite
 
 func main() {
-	fmt.Println("[INFO]", "Starting up...")
+	log.Info("Starting up...")
 	flag.Parse()
 
 	bot, _ := setup()
@@ -64,8 +65,8 @@ func main() {
 }
 
 func OnNotifiedPost(notification discourse.S_Notification, post discourse.S_Post, bot *discourse.DiscourseSite) () {
-	fmt.Println("[INFO]", "Got notification of type", discourse.NotificationTypesInverse[notification.Notification_type])
-	fmt.Println("[INFO]", "Post is id", post.Id)
+	log.Info("Got notification of type", discourse.NotificationTypesInverse[notification.Notification_type])
+	log.Info("Post is id", post.Id)
 	// TODO do something ?
 }
 
@@ -77,12 +78,12 @@ func LikeSummon(notification discourse.S_Notification, post discourse.S_Post, bo
 		var postToLike discourse.S_Post
 		err := bot.DGetJsonTyped(fmt.Sprintf("/posts/by_number/%d/%d", post.Topic_id, post.Reply_to_post_number), &postToLike)
 		if err != nil {
-			fmt.Println("[ERR]", "LikeSummon - failed to load post", err)
+			log.Error("LikeSummon - failed to load post", err)
 			return
 		}
 		err = bot.LikePost(postToLike.Id)
 		if err != nil {
-			fmt.Println("[ERR]", "LikeSummon - liking post", err)
+			log.Error("LikeSummon - liking post", err)
 			return
 		}
 	}

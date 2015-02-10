@@ -1,4 +1,4 @@
-package discourse
+package discourse // import "github.com/riking/DisGoBot/discourse"
 
 import (
 	"encoding/gob"
@@ -12,7 +12,11 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	log "github.com/riking/DisGoBot/logging"
 )
+
+const VERSION = "0.2"
 
 type Config struct {
 	Url       string
@@ -126,15 +130,15 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 		for {
 			time.Sleep(1 * time.Second)
 			req := <-bot.rateLimit
-			fmt.Printf("[INFO] Made request to %s\n", req.URL)
+			log.Info("Made request to", req.URL)
 		}
 	}()
 	go func() {
 		for {
-			for i := 0; i < (500/24); i++ {
+			for i := 0; i < (450/24); i++ {
 				<-bot.likeRateLimit
 			}
-			fmt.Println("[WARN]", "Exhausted hourly like limit")
+			log.Warn("Exhausted hourly like limit")
 			time.Sleep(1 * time.Hour)
 		}
 	}()
@@ -221,11 +225,13 @@ func (d *DiscourseSite) saveCookies() error {
 	filename := d.cookieFile()
 	file, err := os.Open(filename)
 	if err != nil {
-		fmt.Println("saveCookies() open error")
+		log.Error("saveCookies() open error", err)
 		return err
 	}
 	enc := gob.NewEncoder(file)
 	err = enc.Encode(d.cookieJar)
-	fmt.Println("encode error", err)
+	if err != nil {
+		log.Error("encode error", err)
+	}
 	return nil
 }

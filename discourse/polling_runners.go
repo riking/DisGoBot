@@ -1,6 +1,5 @@
 package discourse
 
-//import "github.com/riking/discourse/discourse"
 import (
 	"fmt"
 	"net/url"
@@ -9,6 +8,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	log "github.com/riking/DisGoBot/logging"
 )
 //import "reflect"
 
@@ -41,11 +42,11 @@ func (bot *DiscourseSite) pollMessageBus() {
 	restoreState := func(conn redis.Conn) {
 		reply, err := conn.Do("HGETALL", keyMessageBus)
 		if err != nil {
-			fmt.Println("[ERR]", "restoring message bus state", err)
+			log.Error("restoring message bus state", err)
 			return
 		}
 		if rErr, ok := reply.(redis.Error); ok {
-			fmt.Println("[WARN]", "No message bus state in Redis:", rErr)
+			log.Warn("No message bus state in Redis:", rErr)
 			return
 		}
 		l := reply.([]interface{})
@@ -63,7 +64,7 @@ func (bot *DiscourseSite) pollMessageBus() {
 				messageBusPosition[list[i]] = -1
 			}
 		}
-		fmt.Println("[INFO]", "Message bus after restoring state", messageBusPosition)
+		log.Info("Message bus after restoring state", messageBusPosition)
 		positionLock.Unlock()
 	}
 
@@ -88,20 +89,20 @@ func (bot *DiscourseSite) pollMessageBus() {
 
 		for k, v := range dataCopy {
 			if err := conn.Send("HSET", keyMessageBus, k, v); err != nil {
-				fmt.Println(err)
+				log.Error(err)
 			}
 		}
 		if err := conn.Flush(); err != nil {
-			fmt.Println(err)
+			log.Error(err)
 		}
 		for _, _ = range dataCopy {
 			if _, err := conn.Receive(); err != nil {
-				fmt.Println(err)
+				log.Error(err)
 			}
 		}
 		err := conn.Close()
 		if err != nil {
-			fmt.Println("[ERR]", "Persisting message bus state to Redis:", err)
+			log.Error("Persisting message bus state to Redis:", err)
 		}
 	}
 
@@ -118,11 +119,15 @@ func (bot *DiscourseSite) pollMessageBus() {
 		// Send request
 		err := bot.DPostJsonTyped(pollUrl, postData, &response)
 		if err != nil {
-			fmt.Println(err)
+			log.Error("Polling message bus", err)
 			time.Sleep(60 * time.Second)
+			continue
 		}
 
-		fmt.Println("[DBUG]", "Message bus response", response)
+		if len(response) > 0 {
+			log.Debug("Message bus response", response)
+		}
+
 		// Dump into channel
 		for _, msg := range response {
 			messageChan <- msg
@@ -130,7 +135,7 @@ func (bot *DiscourseSite) pollMessageBus() {
 		time.Sleep(3 * time.Second)
 
 		if lastRedisSave.Add(30 * time.Second).Before(time.Now()) {
-			fmt.Println("[INFO]", "Persisting message bus to Redis")
+			log.Info("Persisting message bus to Redis")
 			lastRedisSave = time.Now()
 			saveState()
 		}
@@ -201,10 +206,10 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 
 	for {
 		<-bot.onNotification
-		fmt.Println("[INFO]", "Fetching notifications")
+		log.Info("Fetching notifications")
 		err := bot.DGetJsonTyped("/notifications.json", &response)
 		if err != nil {
-			fmt.Println("[ERR]", "Notifications error!", err)
+			log.Error("Notifications error!", err)
 			time.Sleep(60 * time.Second)
 			continue
 		}
@@ -222,12 +227,14 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 			}
 		}
 
-		fmt.Println("[INFO]", "Got", toProcessCount, "notifications to process")
+		log.Info("Got", toProcessCount, "notifications to process")
 		// Mark all as read and ignore the reflection updates
 		if toProcessCount > 0 {
 			err = bot.DPut("/notifications/reset-new", "")
 			if err != nil {
-				fmt.Println("[ERR]", "Notifications error!", "reset-new", err)
+				log.Error("Notifications error!", "reset-new", err)
+			} else {
+				<-bot.onNotification
 			}
 		}
 
@@ -242,7 +249,7 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 			if notification.Created_at_ts.After(newLastSeen) {
 				newLastSeen = notification.Created_at_ts
 			}
-			fmt.Println("[INFO]", "Processing notification at", notification.Created_at_ts)
+			log.Info("Processing notification at", notification.Created_at_ts)
 			processedNum++
 
 			notifyType := notification.Notification_type
@@ -257,10 +264,10 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 			// If the notification is assosciated with a post
 			if notification.Topic_id > 0 {
 				if len(bot.notifyPostCallbacks) > 0 {
-					fmt.Println("[INFO]", "Fetching post ", notification.Topic_id, notification.Post_number, "from notification")
+					log.Info("Fetching post ", notification.Topic_id, notification.Post_number, "from notification")
 					err = bot.DGetJsonTyped(fmt.Sprintf("/posts/by_number/%d/%d.json", notification.Topic_id, notification.Post_number), &post)
 					if err != nil {
-						fmt.Println("[ERR]", "Notifications error!", err)
+						log.Error("Notifications error!", err)
 						time.Sleep(60 * time.Second)
 					} else {
 						for _, handler := range bot.notifyPostCallbacks {
@@ -274,7 +281,7 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 		}
 		lastSeen = newLastSeen
 
-		fmt.Println("[INFO]", "Finished processing", processedNum, "notifications")
+		log.Info("Finished processing", processedNum, "notifications")
 
 		time.Sleep(2 * time.Second)
 	}
@@ -300,7 +307,7 @@ func SeeEveryPost(bot *DiscourseSite, highestSeen *int, callback SeeEveryPostCal
 
 		err := bot.DGetJsonTyped(request, &posts)
 		if err != nil {
-			fmt.Println("[ERR]", err)
+			log.Error("failed to load /posts.json", err)
 			return
 		}
 

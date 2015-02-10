@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/riking/discourse/meta"
+	log "github.com/riking/DisGoBot/logging"
 )
 
 // Repsonse Types
@@ -89,7 +89,7 @@ func addHeaders(d *DiscourseSite, req *http.Request) {
 	req.Header = map[string][]string {
 		"Accept-Language": {"en-us"},
 		"Connection": {"keep-alive"},
-		"User-Agent": {fmt.Sprintf("DisGoBot %s @%s", meta.VERSION, d.name)},
+		"User-Agent": {fmt.Sprintf("DisGoBot %s @%s", VERSION, d.name)},
 		"X-Requested-With": {"XMLHttpRequest"},
 		"X-CSRF-Token": {d.csrfToken},
 	}
@@ -132,7 +132,7 @@ func (d *DiscourseSite) RefreshCSRF() (err error) {
 	var csrf ResponseCSRF
 	err = json.Unmarshal(buf, &csrf)
 	if err != nil {
-		fmt.Println("error getting csrf", err, buf)
+		log.Error("Error getting csrf", err, buf)
 		return err
 	}
 
