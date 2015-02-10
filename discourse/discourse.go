@@ -8,7 +8,9 @@ import (
 	"net/http/cookiejar"
 	"os"
 	"crypto/rand"
-	"github.com/fzzy/radix/redis"
+	"github.com/garyburd/redigo/redis"
+	"strconv"
+	"sync"
 	"time"
 )
 
@@ -19,8 +21,14 @@ type Config struct {
 	Username  string
 	Password  string
 
-	RedisURL  string
+	RedisURL         string
+	RedisDB          int
+	RedisTimeoutSecs float64
 }
+
+type ConfigError string
+
+func (e ConfigError) Error() string { return string(e); }
 
 func init() {
 	var dummyJar cookiejar.Jar
@@ -44,23 +52,27 @@ type DiscourseSite struct {
 	csrfToken     string
 
 	// Client objects
-	cookieJar     *cookiejar.Jar
-	httpClient    *http.Client
-	redisClient   *redis.Client
+	cookieJar            *cookiejar.Jar
+	httpClient           http.Client
+	redisPool            redis.Pool
+	_sharedRedisConn     redis.Conn
+	_sharedRedisRefcount int
+	_sharedRedisLock     sync.Mutex
 
 	// Channels
 	rateLimit        chan *http.Request
 	likeRateLimit    chan bool
 	onNotification   chan bool
+	messageBusResets chan string
 
 	// Callback holders
-	messageBus            map[string]int
 	messageBusCallbacks   map[string]MessageBusCallback
 	notifyCallbacks       []notificationSubscription
 	notifyPostCallbacks   []notifyWPostSubscription
 }
 
-var OnNotification chan bool // TODO ugly
+// TODO this var is ugly
+var OnNotification chan bool
 
 func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot = new(DiscourseSite)
@@ -68,25 +80,45 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot.baseUrl = config.Url
 	bot.name = config.BotName
 
-	bot.cookieJar, _ = cookiejar.New(nil)
+	bot.cookieJar, _ = cookiejar.New(nil) // never errors
 	bot.httpClient.Jar = bot.cookieJar
-	bot.redisClient, err = redis.Dial("tcp", config.RedisURL)
-	if err != nil {
-		return
+	var redisDB = strconv.Itoa(config.RedisDB)
+	bot.redisPool = redis.Pool {
+		MaxIdle: 2,
+		MaxActive: 5,
+		Dial: func() (redis.Conn, error) {
+			client, e := redis.Dial("tcp", config.RedisURL)
+			if e != nil {
+				return nil, e
+			}
+			r, e := client.Do("SELECT", redisDB)
+			if e != nil {
+				client.Close()
+				return nil, e
+			}
+			if selectErr, typeCheck := r.(redis.Error); typeCheck {
+				client.Close()
+				return nil, selectErr
+			}
+			return client, nil
+		},
+		Wait: true,
+		// casting to assure that I do want float multiply casted to int
+		IdleTimeout: time.Duration(int64(config.RedisTimeoutSecs * float64(time.Second))),
 	}
 
 	bot.rateLimit = make(chan *http.Request, 3)
 	bot.likeRateLimit = make(chan bool)
 	bot.onNotification = make(chan bool)
 	OnNotification = bot.onNotification
+	bot.messageBusResets = make(chan string)
 
-	bot.messageBus = make(map[string]int)
 	bot.messageBusCallbacks = make(map[string]MessageBusCallback)
 	bot.clientId = uuid()
 
 	err = bot.loadCookies()
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	// Feed ratelimit
@@ -107,9 +139,19 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 		}
 	}()
 
-	go bot.PollMessageBus()
+	go bot.pollMessageBus()
 
-	return
+	return bot, nil
+}
+
+// A DiscourseSite instance is not safe to use after being destroyed.
+func (bot *DiscourseSite) Destroy() (err error) {
+	err2 := bot.redisPool.Close()
+
+	if err2 != nil {
+		return err2
+	}
+	return nil
 }
 
 func uuid() string {
@@ -122,6 +164,39 @@ func uuid() string {
 	u[8] = (u[8]|0x80)&0xBF
 	u[6] = (u[6]|0x40)&0x4F
 	return hex.EncodeToString(u)
+}
+
+func (bot *DiscourseSite) GetSharedRedis() redis.Conn {
+	bot._sharedRedisLock.Lock()
+	defer bot._sharedRedisLock.Unlock()
+
+	if bot._sharedRedisRefcount == 0 {
+		bot._sharedRedisConn = bot.redisPool.Get()
+		bot._sharedRedisRefcount = 1
+		return bot._sharedRedisConn
+	} else {
+		bot._sharedRedisRefcount++
+		return bot._sharedRedisConn
+	}
+}
+
+func (bot *DiscourseSite) ReleaseSharedRedis(conn redis.Conn) {
+	bot._sharedRedisLock.Lock()
+	defer bot._sharedRedisLock.Unlock()
+
+	if conn != bot._sharedRedisConn {
+		panic("Attempt to release the wrong shared redis connection!")
+	}
+	if bot._sharedRedisRefcount == 1 {
+		bot._sharedRedisConn.Close()
+		bot._sharedRedisRefcount = 0
+	} else {
+		bot._sharedRedisRefcount--
+	}
+}
+
+func (d *DiscourseSite) TakeUnsharedRedis() redis.Conn {
+	return d.redisPool.Get()
 }
 
 func (d *DiscourseSite) cookieFile() string {

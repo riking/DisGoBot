@@ -4,11 +4,13 @@ package discourse
 import (
 	"fmt"
 	"net/url"
-//	"github.com/fzzy/radix/redis"
+	"github.com/garyburd/redigo/redis"
 	"strconv"
 	"sort"
+	"sync"
 	"time"
 )
+//import "reflect"
 
 type SeeEveryPostCallback func(S_Post, *DiscourseSite) ()
 type NotificationCallback func(S_Notification, *DiscourseSite) ()
@@ -18,59 +20,153 @@ type MessageBusCallback func(S_MessageBus, *DiscourseSite) ()
 const MaxUint = ^uint(0)
 const MaxInt = int(MaxUint >> 1)
 
-func (bot *DiscourseSite) PollMessageBus() {
-	var response ResponseMessageBus
-	var channelData url.Values = url.Values{}
-	var pollUrl string = fmt.Sprintf("/message-bus/%s/poll", bot.clientId)
-	var err error
-	var messageChan chan S_MessageBus = make(chan S_MessageBus)
+const (
+	keyMessageBus = "disgobot:MessageBusStatus"
+)
 
-	bot.messageBusCallbacks["/__status"] = updateChannels
+func (bot *DiscourseSite) pollMessageBus() {
+	var postData url.Values = url.Values{}
+	var pollUrl string = fmt.Sprintf("/message-bus/%s/poll", bot.clientId)
+	var messageChan chan S_MessageBus = make(chan S_MessageBus)
+	var messageBusPosition map[string]int = make(map[string]int)
+	var positionLock sync.Mutex
+	var lastRedisSave time.Time = time.Now()
+
+	//	bot.messageBusCallbacks["/__status"] = updateChannels
 
 	// Dispatcher thread
-	go func() {
-		for msg := range messageChan {
-			callback := bot.messageBusCallbacks[msg.Channel]
-			if callback != nil {
-				callback(msg, bot)
-			}
-			if msg.Channel != "/__status" {
-				bot.messageBus[msg.Channel] = msg.Message_Id
+	go _dispatchMessageBus(messageChan, messageBusPosition, &positionLock, bot)
+	go _processResets(bot.messageBusResets, messageBusPosition, &positionLock)
+
+	restoreState := func(conn redis.Conn) {
+		reply, err := conn.Do("HGETALL", keyMessageBus)
+		if err != nil {
+			fmt.Println("[ERR]", "restoring message bus state", err)
+			return
+		}
+		if rErr, ok := reply.(redis.Error); ok {
+			fmt.Println("[WARN]", "No message bus state in Redis:", rErr)
+			return
+		}
+		l := reply.([]interface{})
+		list := make([]string, len(l))
+		for i, v := range l {
+			list[i] = string(v.([]uint8))
+		}
+
+		positionLock.Lock()
+		for i := 0; i < len(list); i = i+2 {
+			n, err := strconv.Atoi(list[i + 1])
+			if n != 0 && err == nil {
+				messageBusPosition[list[i]] = n
+			} else {
+				messageBusPosition[list[i]] = -1
 			}
 		}
-	}()
-
-	// Wait for registrations
-	for len(bot.messageBus) == 0 {
-		time.Sleep(1 * time.Second)
+		fmt.Println("[INFO]", "Message bus after restoring state", messageBusPosition)
+		positionLock.Unlock()
 	}
 
+	// Wait for registrations
+	for len(bot.messageBusCallbacks) == 0 {
+		time.Sleep(1 * time.Second)
+	}
+	time.Sleep(1 * time.Second)
+
+	c := bot.GetSharedRedis()
+	restoreState(c)
+	bot.ReleaseSharedRedis(c)
+
+	saveState := func() {
+		conn := bot.TakeUnsharedRedis()
+		dataCopy := make(map[string]string)
+		positionLock.Lock()
+		for k, v := range messageBusPosition {
+			dataCopy[k] = strconv.Itoa(v)
+		}
+		positionLock.Unlock()
+
+		for k, v := range dataCopy {
+			if err := conn.Send("HSET", keyMessageBus, k, v); err != nil {
+				fmt.Println(err)
+			}
+		}
+		if err := conn.Flush(); err != nil {
+			fmt.Println(err)
+		}
+		for _, _ = range dataCopy {
+			if _, err := conn.Receive(); err != nil {
+				fmt.Println(err)
+			}
+		}
+		err := conn.Close()
+		if err != nil {
+			fmt.Println("[ERR]", "Persisting message bus state to Redis:", err)
+		}
+	}
+
+	var response ResponseMessageBus
 	for {
 		// Set up form data
-		for channel, pos := range bot.messageBus {
-			channelData.Set(channel, strconv.Itoa(pos))
+		postData = url.Values{}
+		positionLock.Lock()
+		for channel, pos := range messageBusPosition {
+			postData.Set(channel, strconv.Itoa(pos))
 		}
+		positionLock.Unlock()
 
 		// Send request
-		err = bot.DPostJsonTyped(pollUrl, channelData, &response)
+		err := bot.DPostJsonTyped(pollUrl, postData, &response)
 		if err != nil {
 			fmt.Println(err)
 			time.Sleep(60 * time.Second)
 		}
 
-		fmt.Println("[INFO]", "Message bus response", response)
+		fmt.Println("[DBUG]", "Message bus response", response)
 		// Dump into channel
 		for _, msg := range response {
 			messageChan <- msg
 		}
 		time.Sleep(3 * time.Second)
+
+		if lastRedisSave.Add(30 * time.Second).Before(time.Now()) {
+			fmt.Println("[INFO]", "Persisting message bus to Redis")
+			lastRedisSave = time.Now()
+			saveState()
+		}
 	}
 }
 
-// channel: /__status
-func updateChannels(msg S_MessageBus, bot *DiscourseSite) {
-	for channel, pos := range msg.Data {
-		bot.messageBus[channel] = int(pos.(float64))
+func _dispatchMessageBus(messageChan chan S_MessageBus,
+	messageBusPosition map[string]int,
+	positionLock *sync.Mutex,
+	bot *DiscourseSite) {
+	for msg := range messageChan {
+		positionLock.Lock()
+		if msg.Channel != "/__status" {
+			messageBusPosition[msg.Channel] = msg.Message_Id
+		} else {
+			for channel, pos := range msg.Data {
+				messageBusPosition[channel] = int(pos.(float64))
+			}
+		}
+		positionLock.Unlock()
+
+		// TODO multiple callbacks on one channel
+		callback := bot.messageBusCallbacks[msg.Channel]
+		if callback != nil {
+			callback(msg, bot)
+		}
+	}
+}
+
+func _processResets(toReset chan string,
+	messageBusPosition map[string]int,
+	positionLock *sync.Mutex) {
+	for channel := range toReset {
+		positionLock.Lock()
+		messageBusPosition[channel] = -1
+		positionLock.Unlock()
 	}
 }
 
@@ -86,7 +182,8 @@ func contains(s []int, e int) bool {
 }
 
 type ByCreatedAt ResponseNotifications
-func (r ByCreatedAt) Len() int      { return len(r) }
+
+func (r ByCreatedAt) Len() int { return len(r) }
 func (r ByCreatedAt) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
 func (r ByCreatedAt) Less(j, i int) bool {
 	return r[i].Created_at_ts.Before(r[j].Created_at_ts)
@@ -121,7 +218,7 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 		toProcessCount := 0
 		for _, n := range response {
 			if !n.Read {
-				toProcessCount = toProcessCount + 1
+				toProcessCount = toProcessCount+1
 			}
 		}
 

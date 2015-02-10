@@ -7,8 +7,8 @@ import (
 )
 
 func (bot *DiscourseSite) Subscribe(channel string, callback MessageBusCallback) {
-	bot.messageBus[channel] = -1
 	bot.messageBusCallbacks[channel] = callback
+	bot.messageBusResets <- channel
 }
 
 type notificationSubscription struct {
