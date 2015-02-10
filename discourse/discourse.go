@@ -3,12 +3,13 @@ package discourse
 import (
 	"encoding/gob"
 	"fmt"
+	"encoding/hex"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
-	"time"
 	"crypto/rand"
-	"encoding/hex"
+	"github.com/fzzy/radix/redis"
+	"time"
 )
 
 type Config struct {
@@ -17,6 +18,8 @@ type Config struct {
 
 	Username  string
 	Password  string
+
+	RedisURL  string
 }
 
 func init() {
@@ -32,34 +35,47 @@ func init() {
 // DiscourseSite
 
 type DiscourseSite struct {
+	// Config strings
 	baseUrl       string
 	name          string
-	cookieJar     *cookiejar.Jar
-	httpClient    http.Client
+
+	// Generated strings
 	clientId      string
 	csrfToken     string
 
+	// Client objects
+	cookieJar     *cookiejar.Jar
+	httpClient    *http.Client
+	redisClient   *redis.Client
+
+	// Channels
 	rateLimit        chan *http.Request
 	likeRateLimit    chan bool
 	onNotification   chan bool
 
+	// Callback holders
 	messageBus            map[string]int
 	messageBusCallbacks   map[string]MessageBusCallback
 	notifyCallbacks       []notificationSubscription
 	notifyPostCallbacks   []notifyWPostSubscription
 }
 
-var OnNotification chan bool
+var OnNotification chan bool // TODO ugly
 
 func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot = new(DiscourseSite)
 
 	bot.baseUrl = config.Url
 	bot.name = config.BotName
-	bot.cookieJar, err = cookiejar.New(nil)
-	bot.httpClient.Jar = bot.cookieJar
 
-	bot.rateLimit = make(chan *http.Request)
+	bot.cookieJar, _ = cookiejar.New(nil)
+	bot.httpClient.Jar = bot.cookieJar
+	bot.redisClient, err = redis.Dial("tcp", config.RedisURL)
+	if err != nil {
+		return
+	}
+
+	bot.rateLimit = make(chan *http.Request, 3)
 	bot.likeRateLimit = make(chan bool)
 	bot.onNotification = make(chan bool)
 	OnNotification = bot.onNotification
@@ -69,6 +85,9 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot.clientId = uuid()
 
 	err = bot.loadCookies()
+	if err != nil {
+		return
+	}
 
 	// Feed ratelimit
 	go func() {

@@ -4,12 +4,13 @@ package discourse
 import (
 	"fmt"
 	"net/url"
+//	"github.com/fzzy/radix/redis"
 	"strconv"
 	"sort"
 	"time"
 )
 
-type SeeEveryPostCallback func(S_Post) ()
+type SeeEveryPostCallback func(S_Post, *DiscourseSite) ()
 type NotificationCallback func(S_Notification, *DiscourseSite) ()
 type NotifyWithPostCallback func(S_Notification, S_Post, *DiscourseSite) ()
 type MessageBusCallback func(S_MessageBus, *DiscourseSite) ()
@@ -120,7 +121,7 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 		toProcessCount := 0
 		for _, n := range response {
 			if !n.Read {
-				toProcessCount++
+				toProcessCount = toProcessCount + 1
 			}
 		}
 
@@ -182,6 +183,7 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 	}
 }
 
+// TODO this is gahbage
 func SeeEveryPost(bot *DiscourseSite, highestSeen *int, callback SeeEveryPostCallback, onlyBelow int) {
 	var posts ResponseLatestPosts
 	var request string
@@ -208,7 +210,7 @@ func SeeEveryPost(bot *DiscourseSite, highestSeen *int, callback SeeEveryPostCal
 
 		for _, post := range posts.Latest_posts {
 			if post.Id < lowestId && post.Id > *highestSeen {
-				callback(post)
+				callback(post, bot)
 			}
 			if post.Id > myHighest {
 				myHighest = post.Id

@@ -88,11 +88,13 @@ func LikeSummon(notification discourse.S_Notification, post discourse.S_Post, bo
 	}
 }
 
+
+
 func GiveOutNicePosts(bot *discourse.DiscourseSite) {
 	var highestSeen int = 0
 	regex := regexp.MustCompile("(?i)purple")
 
-	likePosts := func(post discourse.S_Post) {
+	likePosts := func(post discourse.S_Post, bot *discourse.DiscourseSite) {
 		var err error
 		if post.Like_count == 9 {
 			err = bot.LikePost(post.Id)
@@ -118,6 +120,7 @@ func GiveOutNicePosts(bot *discourse.DiscourseSite) {
 	}
 
 	// highestSeen = SOME_VALUE // load from persistent store?
+	// TODO change change change!
 	func() {
 		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 188682);
 		for {

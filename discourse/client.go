@@ -60,6 +60,8 @@ func (bot *DiscourseSite) SubscribeNotificationPost(callback NotifyWithPostCallb
 	bot.notifyPostCallbacks = append(bot.notifyPostCallbacks, notifyWPostSubscription{callback, notifyTypes})
 }
 
+
+
 func (bot *DiscourseSite) Login(config Config) (err error) {
 	err = bot.RefreshCSRF()
 	if err != nil {
