@@ -153,6 +153,10 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 			if !messageBusUrlRegex.MatchString(req.URL.String()) {
 				log.Info("Made request to", req.URL)
 			}
+			req = <-bot.rateLimit
+			if !messageBusUrlRegex.MatchString(req.URL.String()) {
+				log.Info("Made request to", req.URL)
+			}
 		}
 	}()
 

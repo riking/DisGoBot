@@ -80,9 +80,19 @@ func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
 	if regex.MatchString(post.Raw) {
 		log.Info("Found meaningless post", post.Topic_id, "/", post.Post_number, "-", "liking")
 		bot.LikePost(post.Id)
-//	} else if (post.Topic_id == 1000) {
-//		log.Info("Liking likes thread post", post.Post_number)
-//		bot.LikePost(post.Id)
+	} else if (post.Topic_id == 1000) {
+		actions := post.Actions_summary
+		for _, act := range actions {
+			if act.Id == 2 {
+				if act.Can_act {
+					log.Info("Liking likes thread post", post.Post_number)
+					bot.LikePost(post.Id)
+				} else {
+					log.Debug("Found already-liked likes thread post", post.Post_number)
+				}
+				break
+			}
+		}
 	} else {
 	}
 }

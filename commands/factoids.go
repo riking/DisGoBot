@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	// "strconv"
 	// "github.com/garyburd/redigo/redis"
 	"regexp"
@@ -25,6 +26,8 @@ func init() {
 	CommandMap["forget"] = forget
 	CommandMap["f"] = forget
 
+	CommandMap["listfactoids"] = listfactoids
+
 	FactoidHandlers["alias"] = factoidHandlerAlias
 	FactoidHandlers["reply"] = factoidHandlerReply
 }
@@ -37,15 +40,15 @@ func (e FactoidError) Error() string { return string(e) }
 const rgxFactoidName = "[a-zA-Z0-9?!_-]+"
 const rgxHandlerName = "[a-z]+"
 
-var remember_StripName = regexp.MustCompile("\\s+" + rgxFactoidName + "\\s+(.*)")
-var factoidPattern = regexp.MustCompile(rgxFactoidName)
+var remember_StripName = regexp.MustCompile("^\\s+" + rgxFactoidName + "\\s+([^\n]*)")
+var factoidPattern = regexp.MustCompile("^" + rgxFactoidName)
 var handlerPattern = regexp.MustCompile("\\[(" + rgxHandlerName + ")\\]")
 
 
 func remember(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
-	factoidName := splitArgs[1]
+	factoidName := splitArgs[0]
 
 	if !factoidPattern.MatchString(factoidName) {
 		c.AddReply(fmt.Sprintf(
@@ -79,7 +82,7 @@ func remember(extraArgs string, splitArgs []string, c *CommandContext) {
 func forget(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
-	factoidName := splitArgs[1]
+	factoidName := splitArgs[0]
 
 	if !factoidPattern.MatchString(factoidName) {
 		c.AddReply(fmt.Sprintf(
@@ -100,10 +103,30 @@ func forget(extraArgs string, splitArgs []string, c *CommandContext) {
 			`Forgot '%s'.`, factoidName))
 }
 
+func listfactoids(extraArgs string, splitArgs []string, c *CommandContext) {
+	matchRequest := splitArgs[0]
+
+	resp, err := c.Redis().Do("KEYS", fmt.Sprintf("disgobot:factoid:%s", matchRequest))
+	if err != nil {
+		c.AddReply(fmt.Sprintf(
+			`Redis error: %s`, err))
+		log.Warn("Listing factoids fail: redis error:", err)
+		return
+	}
+
+	var buffer bytes.Buffer
+
+	for _, byteString := range resp.([]interface{}) {
+		fmt.Fprintf(&buffer, "%s: (TODO info here)  \n", byteString)
+	}
+
+	c.AddReply(buffer.String())
+}
+
 func cmdGetFactoid(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
-	factoidName := splitArgs[1]
+	factoidName := splitArgs[0]
 
 	if !factoidPattern.MatchString(factoidName) {
 		c.AddReply(fmt.Sprintf(
@@ -191,6 +214,13 @@ func factoidHandlerAlias(factoidRaw string,
 
 	aliasedFactoidName := factoidRaw[idxs[2]:idxs[3]]
 	aliasedFactoidArgs := factoidRaw[idxs[1]:]
-	// TODO catch infinite recursion
+
+	recursionKey := fmt.Sprintf("factoid_alias:%s", aliasedFactoidName)
+	if str_contains(context.RecursionChain, recursionKey) {
+		return "", FactoidError("RECURSION DETECTED")
+	} else {
+		context.RecursionChain = append(context.RecursionChain, recursionKey)
+	}
+
 	return doFactoid(aliasedFactoidName, aliasedFactoidArgs, context)
 }

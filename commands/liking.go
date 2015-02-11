@@ -36,20 +36,20 @@ func likethat(extraArgs string, splitArgs []string, c *CommandContext) {
 
 
 func likepost(extraArgs string, splitArgs []string, c *CommandContext) {
-	if len(splitArgs) < 2+1 {
+	if len(splitArgs) < 2 {
 		c.AddReply("Not enough arguments.")
 		return
 	}
-	topicId, err := strconv.Atoi(splitArgs[1])
+	topicId, err := strconv.Atoi(splitArgs[0])
+	if err != nil {
+		c.AddReply(fmt.Sprintf(
+			"Cannot parse %s as number: %s", splitArgs[0], err))
+		return
+	}
+	postNum, err := strconv.Atoi(splitArgs[1])
 	if err != nil {
 		c.AddReply(fmt.Sprintf(
 			"Cannot parse %s as number: %s", splitArgs[1], err))
-		return
-	}
-	postNum, err := strconv.Atoi(splitArgs[2])
-	if err != nil {
-		c.AddReply(fmt.Sprintf(
-			"Cannot parse %s as number: %s", splitArgs[2], err))
 		return
 	}
 	postToLike, err := c.Bot.GetPostByNumber(topicId, postNum)
@@ -62,12 +62,12 @@ func likepost(extraArgs string, splitArgs []string, c *CommandContext) {
 
 var usernameRegex = regexp.MustCompile("^[a-zA-Z][a-zA-z0-9_]+$")
 func seen(extraArgs string, splitArgs []string, c *CommandContext) {
-	if len(splitArgs) < 1+1 {
+	if len(splitArgs) < 1 {
 		c.AddReply("Not enough arguments.")
 		return
 	}
 	log.Debug(strings.Join(splitArgs,","))
-	username := splitArgs[1]
+	username := splitArgs[0]
 	if !usernameRegex.MatchString(username) {
 		c.AddReply(fmt.Sprintf(
 			"'%s' is not a valid username.", username))
