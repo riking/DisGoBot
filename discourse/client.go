@@ -142,6 +142,8 @@ func (bot *DiscourseSite) GetPostByNumber(topicId int, postNumber int) (post S_P
 }
 
 func (bot *DiscourseSite) Reply(topicId int, postNumber int, raw string) (S_Post, error) {
+	<-bot.postRateLimit
+
 	var postReturn S_Post
 	data := url.Values{}
 	data.Set("raw", fmt.Sprintf(

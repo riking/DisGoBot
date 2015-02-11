@@ -101,7 +101,7 @@ func CheckForCommand(post discourse.S_Post, bot *discourse.DiscourseSite) {
 	if mentionRegex.MatchString(post.Raw) {
 		parsed := mentionRegex.FindAllStringSubmatch(post.Raw, 10)
 
-		commands.RunCommandBatch(parsed, post, bot)
+		go commands.RunCommandBatch(parsed, post, bot)
 	} else {
 		log.Debug("no command found")
 	}

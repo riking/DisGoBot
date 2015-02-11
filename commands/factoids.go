@@ -23,6 +23,7 @@ func init() {
 	CommandMap["recall"] = cmdGetFactoid
 	CommandMap["get"] = cmdGetFactoid
 	CommandMap["?"] = cmdGetFactoid
+	CommandMap["!"] = cmdGetFactoid
 
 	CommandMap["forget"] = forget
 	CommandMap["f"] = forget
@@ -43,6 +44,13 @@ func init() {
 		}
 	}
 	ReplaceHandlers["replyuser"] = replaceHandlerRepliedUser
+	ReplaceHandlers["iorr"] = func(args string, c *CommandContext) (string, error) {
+		if onlyWhitespacePattern.MatchString(args) {
+			return replaceHandlerRepliedUser(args, c)
+		} else {
+			return args, nil
+		}
+	}
 }
 
 // First string is factoid raw, second string is arguments

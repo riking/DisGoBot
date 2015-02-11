@@ -71,6 +71,7 @@ type DiscourseSite struct {
 
 	// Channels
 	rateLimit        chan *http.Request
+	postRateLimit    chan bool
 	onNotification   chan bool
 	messageBusResets chan string
 	PostHappened     chan bool
@@ -123,6 +124,7 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot.likeRateLimit = NewDRateLimiter(_LIKES_PER_DAY, 24 * time.Hour)
 
 	bot.rateLimit = make(chan *http.Request)
+	bot.postRateLimit = make(chan bool)
 	bot.onNotification = make(chan bool)
 	onNotification = bot.onNotification
 	bot.messageBusResets = make(chan string, 10) // TODO HACK HACK HACK
@@ -157,6 +159,12 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 			if !messageBusUrlRegex.MatchString(req.URL.String()) {
 				log.Info("Made request to", req.URL)
 			}
+		}
+	}()
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			bot.postRateLimit <- true
 		}
 	}()
 
