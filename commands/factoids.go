@@ -12,6 +12,7 @@ import (
 )
 
 var FactoidHandlers = map[string]FactoidHandlerFunc{}
+var ReplaceHandlers = map[string]ReplaceHandlerFunc{}
 
 func init() {
 	CommandMap["r"] = remember
@@ -30,10 +31,23 @@ func init() {
 
 	FactoidHandlers["alias"] = factoidHandlerAlias
 	FactoidHandlers["reply"] = factoidHandlerReply
+
+	ReplaceHandlers["args"] = func(args string, c *CommandContext) (string, error) { return args, nil }
+	ReplaceHandlers["inp"] = func(args string, c *CommandContext) (string, error) { return args, nil }
+	ReplaceHandlers["user"] = func(args string, c *CommandContext) (string, error) { return c.User.Username, nil }
+	ReplaceHandlers["ioru"] = func(args string, c *CommandContext) (string, error) {
+		if onlyWhitespacePattern.MatchString(args) {
+			return c.User.Username, nil
+		} else {
+			return args, nil
+		}
+	}
+	ReplaceHandlers["replyuser"] = replaceHandlerRepliedUser
 }
 
 // First string is factoid raw, second string is arguments
 type FactoidHandlerFunc func(string, string, *CommandContext) (string, error)
+type ReplaceHandlerFunc func(string, *CommandContext) (string, error)
 type FactoidError string
 func (e FactoidError) Error() string { return string(e) }
 
@@ -43,7 +57,7 @@ const rgxHandlerName = "[a-z]+"
 var remember_StripName = regexp.MustCompile("^\\s+" + rgxFactoidName + "\\s+([^\n]*)")
 var factoidPattern = regexp.MustCompile("^" + rgxFactoidName)
 var handlerPattern = regexp.MustCompile("\\[(" + rgxHandlerName + ")\\]")
-
+var onlyWhitespacePattern = regexp.MustCompile("^\\s*$")
 
 func remember(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
@@ -176,15 +190,64 @@ func doFactoid(factoidName string,
 			panic("inconsistency with MatchString vs FindStringSubmatchIndex?")
 		}
 		handlerName := raw[idxs[2]:idxs[3]]
-		handler, ok := FactoidHandlers[handlerName]
-		if !ok {
-			return "", FactoidError("Could not find handler called " + handlerName)
+
+		if handlerName != "alias" {
+			handler, ok := FactoidHandlers[handlerName]
+			if !ok {
+				return "", FactoidError("Could not find handler called " + handlerName)
+			}
+			raw, err = handler(raw[idxs[1]:], factoidArgs, c)
+		} else {
+			// Special case: replace before alias
+			raw, err = doReplaceRules(raw, factoidArgs, c)
+			if err != nil {
+				return
+			}
+			raw, err = factoidHandlerAlias(raw[idxs[1]:], factoidArgs, c)
 		}
-		raw, err = handler(raw[idxs[1]:], factoidArgs, c)
+	} else {
+		raw, err = doReplaceRules(raw, factoidArgs, c)
 	}
 
 	result = raw
 	return
+}
+
+var replaceTokPattern = regexp.MustCompile("%([a-z]+)([0-9]+)?(-)?([0-9]+)?%")
+func doReplaceRules(factoidRaw string, factoidArgs string, c *CommandContext) (string, error) {
+	if replaceTokPattern.MatchString(factoidRaw) {
+		replacements := replaceTokPattern.FindAllStringSubmatchIndex(factoidRaw, -1)
+		var result bytes.Buffer
+		var currentPos int = 0
+
+		for _, idxs := range replacements {
+			// keep the text outside replacement intact
+			result.WriteString(factoidRaw[currentPos:idxs[0]])
+
+			replaceHandler := factoidRaw[idxs[2]:idxs[3]]
+			if replaceHandler != "arg" {
+				handlerFunc, ok := ReplaceHandlers[replaceHandler]
+				if ok {
+					handlerResult, err := handlerFunc(factoidArgs, c)
+					if err != nil {
+						return "", err
+					} else {
+						result.WriteString(handlerResult)
+					}
+				} else {
+					result.WriteString(factoidRaw[idxs[0]:idxs[1]])
+				}
+			} else {
+				result.WriteString("(TODO LOL)")
+			}
+			currentPos = idxs[1]
+		}
+		result.WriteString(factoidRaw[currentPos:])
+
+		return result.String(), nil
+	} else {
+		return factoidRaw, nil
+	}
 }
 
 /*
@@ -223,4 +286,17 @@ func factoidHandlerAlias(factoidRaw string,
 	}
 
 	return doFactoid(aliasedFactoidName, aliasedFactoidArgs, context)
+}
+
+func replaceHandlerRepliedUser(factoidArgs string, c *CommandContext) (string, error) {
+	if c.Post.Reply_to_post_number == 0 {
+		return "", FactoidError("Post does not have a reply-to")
+	} else {
+		post, err := c.Bot.GetPostByNumber(c.Post.Topic_id, c.Post.Reply_to_post_number)
+		if err != nil {
+			return "", err
+		} else {
+			return post.Username, nil
+		}
+	}
 }
