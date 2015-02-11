@@ -22,6 +22,9 @@ func init() {
 	CommandMap["get"] = cmdGetFactoid
 	CommandMap["?"] = cmdGetFactoid
 
+	CommandMap["forget"] = forget
+	CommandMap["f"] = forget
+
 	FactoidHandlers["alias"] = factoidHandlerAlias
 	FactoidHandlers["reply"] = factoidHandlerReply
 }
@@ -36,7 +39,7 @@ const rgxHandlerName = "[a-z]+"
 
 var remember_StripName = regexp.MustCompile("\\s+" + rgxFactoidName + "\\s+(.*)")
 var factoidPattern = regexp.MustCompile(rgxFactoidName)
-var handlerPattern = regexp.MustCompile("<(" + rgxHandlerName + ")>")
+var handlerPattern = regexp.MustCompile("\\[(" + rgxHandlerName + ")\\]")
 
 
 func remember(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
@@ -73,6 +76,32 @@ func remember(extraArgs string, splitArgs []string, post *discourse.S_Post, bot 
 	_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
 			`Remembered '%s' as "%s".`, factoidName, factoidBody))
 	log.Warn(fmt.Sprintf(`Remembered '%s' as "%s".`, factoidName, factoidBody))
+}
+
+func forget(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
+	var err error
+	// TODO get a more persistent store than Redis
+	factoidName := splitArgs[1]
+
+	if !factoidPattern.MatchString(factoidName) {
+		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+				`Error: '%s' is not a valid factoid name.`, factoidName))
+		log.Warn("Remember fail: Factoid name is not alphanumeric.")
+		return
+	}
+
+	conn := bot.TakeUnsharedRedis()
+	defer conn.Close()
+	_, err = conn.Do("DEL", fmt.Sprintf("disgobot:factoid:%s", factoidName))
+	if err != nil {
+		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+				`Redis error: %s`, err))
+		log.Warn("Forget fail: redis error:", err)
+		return
+	}
+
+	_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+			`Forgot '%s'.`, factoidName))
 }
 
 func cmdGetFactoid(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
