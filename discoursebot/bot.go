@@ -1,18 +1,18 @@
 package main
 
 import (
-	"flag"
-	"io/ioutil"
-	"os"
-
 	"encoding/json"
-
-	"github.com/riking/DisGoBot/discourse"
-	log "github.com/riking/DisGoBot/logging"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"time"
 	"regexp"
 	//	"reflect"
+	"os"
+
+	"github.com/riking/DisGoBot/discourse"
+	log "github.com/riking/DisGoBot/logging"
+	"github.com/riking/DisGoBot/commands"
 )
 
 var configFile string
@@ -59,15 +59,16 @@ func main() {
 
 	// @BotName Match1 m a t c h 2
 	// match2 extends until end of line
-	mentionRegex = regexp.MustCompile(fmt.Sprintf("@%s\\s+(\\w+)\\s*((?:\\s+\\w+)*)\n", bot.Username))
+	mentionRegex = regexp.MustCompile(fmt.Sprintf("(?i)!%s\\s+(\\w+)\\s+((?:\\s+\\w+)*)?\n?", bot.Username))
 
 //	go LikesThread(bot)
 //	go GiveOutNicePosts(bot)
-	bot.SubscribeNotificationPost(LikeSummon, []int{1})
+//	bot.SubscribeNotificationPost(LikeSummon, []int{1})
 	bot.SubscribeNotificationPost(OnNotifiedPost, []int{1,2,3,4,5,6,7,8,9,10,11,12})
 	bot.Subscribe("/topic/1000", watchLikesThread)
 	bot.Subscribe("/latest", watchLatest)
 	bot.SubscribeEveryPost(OnPosted)
+	bot.SubscribeEveryPost(CheckForCommand)
 
 	bot.Start()
 
@@ -76,9 +77,9 @@ func main() {
 }
 
 var regex = regexp.MustCompile("Since likes don't have a lot of meaning in this topic")
-var mentionRegex regexp.Regexp
+var mentionRegex *regexp.Regexp
 func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
-	log.Info("Got post with ID", post.Id)
+	log.Info("OnPosted got post with ID", post.Id)
 
 	if regex.MatchString(post.Raw) {
 		log.Info("Found meaningless post", post.Topic_id, "/", post.Post_number, "-", "liking")
@@ -86,9 +87,24 @@ func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
 	} else if (post.Topic_id == 1000) {
 		log.Info("Liking likes thread post", post.Post_number)
 		bot.LikePost(post.Id)
-	} else if mentionRegex.MatchString(post.Raw) {
-		parsed = mentionRegex.FindAllStringSubmatch(post.Raw, -1)
+	} else {
 	}
+}
+
+func CheckForCommand(post discourse.S_Post, bot *discourse.DiscourseSite) {
+	log.Debug("Command processing. post raw:", post.Raw)
+	if mentionRegex.MatchString(post.Raw) {
+		log.Debug("match")
+		matches := mentionRegex.FindStringSubmatch(post.Raw)
+		log.Debug(len(matches), "X", matches[1], "X", matches[2], "X")
+		if commands.HasCommand(matches[1]) {
+			log.Warn("found command in post", post.Id)
+			commands.RunCommand(matches[1], matches[2], post, bot)
+		}
+	} else {
+		log.Debug("no match")
+	}
+
 }
 
 func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {

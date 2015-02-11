@@ -131,3 +131,12 @@ func (bot *DiscourseSite) ReadPosts(topicId int, posts []int) error {
 	}
 	return bot.DPost("/topics/timings", data)
 }
+
+func (bot *DiscourseSite) GetPostByNumber(topicId int, postNumber int) (post S_Post, err error) {
+	var postReturn S_Post
+	err = bot.DGetJsonTyped(fmt.Sprintf("/posts/by_number/%d/%d", topicId, postNumber), &postReturn)
+	if err != nil {
+		return
+	}
+	return postReturn, nil
+}

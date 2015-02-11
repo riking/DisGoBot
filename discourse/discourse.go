@@ -91,6 +91,7 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 
 	bot.baseUrl = config.Url
 	bot.name = config.BotName
+	bot.Username = config.Username
 
 	bot.cookieJar, _ = cookiejar.New(nil) // never errors
 	bot.httpClient.Jar = bot.cookieJar
