@@ -75,7 +75,8 @@ func main() {
 var regex = regexp.MustCompile("Since likes don't have a lot of meaning in this topic")
 var mentionRegex *regexp.Regexp
 func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
-	log.Info("OnPosted got post with ID", post.Id)
+    // log.Info("OnPosted got post with ID", post.Id)
+	log.Debug(fmt.Sprintf("OnPosted got post {id %d topic %d num %d}", post.Id, post.Topic_id, post.Post_number))
 
 	if regex.MatchString(post.Raw) {
 		log.Info("Found meaningless post", post.Topic_id, "/", post.Post_number, "-", "liking")
@@ -103,7 +104,7 @@ func CheckForCommand(post discourse.S_Post, bot *discourse.DiscourseSite) {
 
 		go commands.RunCommandBatch(parsed, post, bot)
 	} else {
-		log.Debug("no command found")
+		// log.Debug("no command found")
 	}
 
 }
@@ -127,7 +128,7 @@ func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) 
 
 func watchLatest(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
 	if msg.Data["message_type"] == "latest" {
-		log.Debug("post happened", msg)
+		// log.Debug("post happened", msg)
 		bot.PostHappened <- true
 	}
 }

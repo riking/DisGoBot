@@ -29,6 +29,8 @@ func init() {
 	CommandMap["forget"] = forget
 	CommandMap["f"] = forget
 
+	CommandMap["factoidinfo"] = factoidinfo
+	CommandMap["finfo"] = factoidinfo
 	CommandMap["listfactoids"] = listfactoids
 
 	FactoidHandlers["alias"] = factoidHandlerAlias
@@ -69,6 +71,10 @@ var handlerPattern = regexp.MustCompile("\\[(" + rgxHandlerName + ")\\]")
 var onlyWhitespacePattern = regexp.MustCompile("^\\s*$")
 
 func remember(extraArgs string, splitArgs []string, c *CommandContext) {
+	if c.User.EffectiveAccessLevel < 1 {
+		return
+	}
+
 	var err error
 	// TODO get a more persistent store than Redis
 	factoidName := strings.ToLower(splitArgs[0])
@@ -103,6 +109,10 @@ func remember(extraArgs string, splitArgs []string, c *CommandContext) {
 }
 
 func forget(extraArgs string, splitArgs []string, c *CommandContext) {
+	if c.User.EffectiveAccessLevel < 1 {
+		return
+	}
+
 	var err error
 	// TODO get a more persistent store than Redis
 	factoidName := strings.ToLower(splitArgs[0])
@@ -127,6 +137,10 @@ func forget(extraArgs string, splitArgs []string, c *CommandContext) {
 }
 
 func listfactoids(extraArgs string, splitArgs []string, c *CommandContext) {
+	if c.User.EffectiveAccessLevel < 2 {
+		return
+	}
+
 	matchRequest := strings.ToLower(splitArgs[0])
 
 	resp, err := c.Redis().Do("KEYS", fmt.Sprintf("disgobot:factoid:%s", matchRequest))
@@ -146,7 +160,49 @@ func listfactoids(extraArgs string, splitArgs []string, c *CommandContext) {
 	c.AddReply(buffer.String())
 }
 
+
+func factoidinfo(extraArgs string, splitArgs []string, c *CommandContext) {
+	if c.User.EffectiveAccessLevel < -1 {
+		return
+	}
+
+	var err error
+	// TODO get a more persistent store than Redis
+	factoidName := strings.ToLower(splitArgs[0])
+
+	if !factoidPattern.MatchString(factoidName) {
+		c.AddReply(fmt.Sprintf(
+			`Error: '%s' is not a valid factoid name.`, factoidName))
+		return
+	}
+
+	rawBytes, err := c.Redis().Do("GET", fmt.Sprintf("disgobot:factoid:%s", factoidName))
+	if err != nil {
+		c.AddReply(fmt.Sprintf(
+			`Redis error: %s`, err))
+		return
+	}
+	if rawBytes == nil {
+		c.AddReply(fmt.Sprintf(
+			`No such factoid '%s'.`, factoidName))
+		return
+	}
+
+	c.AddReply(fmt.Sprintf(
+`### Factoid '%s'
+
+Created on 2015-TO-DO by @<span></span>TODO
+Source:
+
+    %s
+`, factoidName, rawBytes))
+}
+
 func cmdGetFactoid(extraArgs string, splitArgs []string, c *CommandContext) {
+	if c.User.EffectiveAccessLevel < 0 {
+		return
+	}
+
 	var err error
 	// TODO get a more persistent store than Redis
 	factoidName := strings.ToLower(splitArgs[0])

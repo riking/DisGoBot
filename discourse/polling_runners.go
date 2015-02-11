@@ -442,7 +442,7 @@ func _doFirstBatch(postChan chan <- S_Post, bot *DiscourseSite) (highestPost int
 func _dispatchLatestPosts(postChan <-chan S_Post,
 	bot *DiscourseSite) {
 	for post := range postChan {
-		log.Debug(fmt.Sprintf("Dispatching post {id %d topic %d num %d}", post.Id, post.Topic_id, post.Post_number))
+		// log.Debug(fmt.Sprintf("Dispatching post {id %d topic %d num %d}", post.Id, post.Topic_id, post.Post_number))
 		for _, handler := range bot.everyPostCallbacks {
 			// TODO filters, extra context (topic? category?)
 			handler.callback(post, bot)
