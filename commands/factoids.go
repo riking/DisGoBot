@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"strings"
 	// "strconv"
 	// "github.com/garyburd/redigo/redis"
 	"regexp"
@@ -70,7 +71,7 @@ var onlyWhitespacePattern = regexp.MustCompile("^\\s*$")
 func remember(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
-	factoidName := splitArgs[0]
+	factoidName := strings.ToLower(splitArgs[0])
 
 	if !factoidPattern.MatchString(factoidName) {
 		c.AddReply(fmt.Sprintf(
@@ -104,7 +105,7 @@ func remember(extraArgs string, splitArgs []string, c *CommandContext) {
 func forget(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
-	factoidName := splitArgs[0]
+	factoidName := strings.ToLower(splitArgs[0])
 
 	if !factoidPattern.MatchString(factoidName) {
 		c.AddReply(fmt.Sprintf(
@@ -126,7 +127,7 @@ func forget(extraArgs string, splitArgs []string, c *CommandContext) {
 }
 
 func listfactoids(extraArgs string, splitArgs []string, c *CommandContext) {
-	matchRequest := splitArgs[0]
+	matchRequest := strings.ToLower(splitArgs[0])
 
 	resp, err := c.Redis().Do("KEYS", fmt.Sprintf("disgobot:factoid:%s", matchRequest))
 	if err != nil {
@@ -148,7 +149,7 @@ func listfactoids(extraArgs string, splitArgs []string, c *CommandContext) {
 func cmdGetFactoid(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
-	factoidName := splitArgs[0]
+	factoidName := strings.ToLower(splitArgs[0])
 
 	if !factoidPattern.MatchString(factoidName) {
 		c.AddReply(fmt.Sprintf(
@@ -182,11 +183,15 @@ func doFactoid(factoidName string,
 	factoidArgs string,
 	c *CommandContext) (result string, err error) {
 
+	factoidName = strings.ToLower(factoidName)
 	var raw string
 
 	rawBytes, err := c.Redis().Do("GET", fmt.Sprintf("disgobot:factoid:%s", factoidName))
 	if err != nil {
 		return "", err
+	}
+	if rawBytes == nil {
+		return "", FactoidError("No such factoid exists.")
 	}
 	raw = string(rawBytes.([]uint8))
 
@@ -283,7 +288,7 @@ func factoidHandlerAlias(factoidRaw string,
 		return "", FactoidError("Alias: Nothing specified to alias to, or not a valid factoid name")
 	}
 
-	aliasedFactoidName := factoidRaw[idxs[2]:idxs[3]]
+	aliasedFactoidName := strings.ToLower(factoidRaw[idxs[2]:idxs[3]])
 	aliasedFactoidArgs := factoidRaw[idxs[1]:]
 
 	recursionKey := fmt.Sprintf("factoid_alias:%s", aliasedFactoidName)
