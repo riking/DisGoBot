@@ -8,7 +8,6 @@ import (
 
 	"github.com/riking/DisGoBot/discourse"
 	log "github.com/riking/DisGoBot/logging"
-	"regexp"
 )
 
 type CommandRunner func(string, []string, *CommandContext)
@@ -103,11 +102,10 @@ func RunCommandBatch(commandLines [][]string, post discourse.S_Post, bot *discou
 	}
 }
 
-var whitespaceRegex = regexp.MustCompile("\\s+")
 func RunCommand(commandName string, extraArgs string, context *CommandContext) {
 	log.Info("Processing command", commandName, "with args", extraArgs)
 	commandName = strings.ToLower(commandName)
-	splitArgs := whitespaceRegex.Split(extraArgs, -1)
+	splitArgs := strings.Fields(extraArgs)
 
 	CommandMap[commandName](extraArgs, splitArgs, context)
 }

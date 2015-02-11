@@ -80,9 +80,9 @@ func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
 	if regex.MatchString(post.Raw) {
 		log.Info("Found meaningless post", post.Topic_id, "/", post.Post_number, "-", "liking")
 		bot.LikePost(post.Id)
-	} else if (post.Topic_id == 1000) {
-		log.Info("Liking likes thread post", post.Post_number)
-		bot.LikePost(post.Id)
+//	} else if (post.Topic_id == 1000) {
+//		log.Info("Liking likes thread post", post.Post_number)
+//		bot.LikePost(post.Id)
 	} else {
 	}
 }
@@ -93,7 +93,7 @@ func CheckForCommand(post discourse.S_Post, bot *discourse.DiscourseSite) {
 
 		commands.RunCommandBatch(parsed, post, bot)
 	} else {
-		log.Debug("no match")
+		log.Debug("no command found")
 	}
 
 }
@@ -105,11 +105,13 @@ func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) 
 			log.Warn("got thread message without post ID")
 			return
 		}
-		_, ok = id.(float64)
+		idNum, ok := id.(float64)
 		if !ok {
 			log.Warn("got thread message without numeric post ID", id)
 			return
 		}
+		log.Info("Liking likes thread post", idNum)
+		bot.LikePost(int(idNum))
 	}
 }
 
