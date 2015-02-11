@@ -145,7 +145,7 @@ func (bot *DiscourseSite) pollMessageBus() {
 		}
 
 		if len(response) > 0 {
-//			log.Debug("Message bus response", response)
+			//			log.Debug("Message bus response", response)
 		}
 
 		// Dump into channel
@@ -376,11 +376,19 @@ func (bot *DiscourseSite) PollLatestPosts() {
 
 		select {
 		case <-bot.PostHappened:
+			// Empty the channel
+			for c := true; c; {
+				select {
+				case <-bot.PostHappened:
+				default:
+					c = false
+				}
+			}
 		case <-time.After(10 * time.Minute):
 		}
 
 		log.Debug("Polling for latest posts")
-		err := bot.DGetJsonTyped(fmt.Sprintf("/posts.json?before=%d", highestSeen + 50), &response)
+		err := bot.DGetJsonTyped(fmt.Sprintf("/posts.json?before=%d", highestSeen+50), &response)
 		if err != nil {
 			log.Error("Error polling for latest posts:", err)
 			time.Sleep(1 * time.Minute)
@@ -404,7 +412,7 @@ func (bot *DiscourseSite) PollLatestPosts() {
 	}
 }
 
-func _doFirstBatch(postChan chan<- S_Post, bot *DiscourseSite) (highestPost int, err error) {
+func _doFirstBatch(postChan chan <- S_Post, bot *DiscourseSite) (highestPost int, err error) {
 	var response ResponseLatestPosts
 
 	err = bot.DGetJsonTyped("/posts.json", &response)

@@ -59,7 +59,7 @@ func main() {
 
 	// @BotName Match1 m a t c h 2
 	// match2 extends until end of line
-	mentionRegex = regexp.MustCompile(fmt.Sprintf("(?i)!%s\\s+(\\w+)([^\n]*)", bot.Username))
+	mentionRegex = regexp.MustCompile(fmt.Sprintf("(?i)!%s\\s+(\\S+)([^\n]*)", bot.Username))
 
 //	go LikesThread(bot)
 //	go GiveOutNicePosts(bot)

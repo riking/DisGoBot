@@ -170,6 +170,7 @@ func (bot *DiscourseSite) Start() error {
 	go bot.PollNotifications()
 	go bot.PollLatestPosts()
 	onNotification <- true
+	bot.PostHappened <- true
 
 	return nil
 }

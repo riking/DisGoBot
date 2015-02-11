@@ -1,6 +1,7 @@
 package commands // import "github.com/riking/DisGoBot/commands"
 
 import (
+	"github.com/garyburd/redigo/redis"
 	"strings"
 
 	"github.com/riking/DisGoBot/discourse"
@@ -27,4 +28,10 @@ func RunCommand(commandName string, extraArgs string, post *discourse.S_Post, bo
 
 func help(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
 	log.Warn("Help command not implemented")
+}
+
+func WithRedis(bot *discourse.DiscourseSite, f func(redis.Conn)) {
+	conn := bot.TakeUnsharedRedis()
+	defer conn.Close()
+	f(conn)
 }
