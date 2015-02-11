@@ -117,8 +117,8 @@ func (bot *DiscourseSite) pollMessageBus() {
 		}
 	}
 
-	var response ResponseMessageBus
 	for {
+		var response ResponseMessageBus
 		// Set up form data
 		postData = url.Values{}
 		positionLock.Lock()
