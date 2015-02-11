@@ -36,6 +36,8 @@ func (bot *DiscourseSite) pollMessageBus() {
 	var positionDirty bool = false
 	var positionLock sync.Mutex
 
+	var lastRedisSave time.Time = time.Now()
+
 	//	bot.messageBusCallbacks["/__status"] = updateChannels
 
 	// Dispatcher thread
@@ -151,8 +153,9 @@ func (bot *DiscourseSite) pollMessageBus() {
 			positionLock.Lock()
 			defer positionLock.Unlock()
 			return positionDirty
-		}() {
+		}() && lastRedisSave.Add(10 * time.Second).Before(time.Now()) {
 			saveState()
+			lastRedisSave = time.Now()
 		}
 	}
 }
