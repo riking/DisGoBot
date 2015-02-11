@@ -306,7 +306,7 @@ func (bot *DiscourseSite) PollNotifications() {
 
 		log.Info("Finished processing", processedNum, "notifications")
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(250 * time.Millisecond)
 	}
 }
 

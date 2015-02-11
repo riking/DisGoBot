@@ -274,10 +274,10 @@ func CheckForError(resp *http.Response, body []byte) (err error) {
 		case 429:
 			return ErrorRateLimit{string(body)}
 		}
-		var dError ErrorWithJSON
+		var dError map[string]interface{}
 		marshErr2 := json.Unmarshal(body, dError)
 		if marshErr2 == nil {
-			return dError
+			return ErrorWithJSON{resp.StatusCode, dError}
 		}
 		return ErrorStatusCode(resp.StatusCode)
 	}

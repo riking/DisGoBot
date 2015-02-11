@@ -179,7 +179,7 @@ func factoidHandlerReply(factoidRaw string,
 }
 
 // any number of spaces, then non-spaces, then spaces again
-var patternFirstWord = regexp.MustCompile("\\s*(" + rgxFactoidName + ")\\s*")
+var patternFirstWord = regexp.MustCompile("^\\s*(" + rgxFactoidName + ")\\s*")
 func factoidHandlerAlias(factoidRaw string,
 	_ string,
 	context *CommandContext) (string, error) {

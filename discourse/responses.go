@@ -80,8 +80,11 @@ type S_UserProfile struct {
 	Name                              string
 	Email                             string
 	Last_posted_at                    string
+	LastPostedAtTime                  time.Time
 	Last_seen_at                      string
+	LastSeenAtTime                    time.Time
 	Created_at                        string
+	CreatedAtTime                     time.Time
 	Website                           string
 	Profile_background                string
 	Card_background                   string
@@ -104,7 +107,7 @@ type S_UserProfile struct {
 	Notification_count                int
 	Has_title_badges                  bool
 	Custom_fields                     map[string]interface{}
-	User_fields                       map[int]string
+	User_fields                       map[string]string
 	S_UserProfileStaffData
 	S_UserProfilePrivateData
 	Invited_by                        string
@@ -112,6 +115,13 @@ type S_UserProfile struct {
 	Featured_user_badge_ids           []int
 	Card_badge                        interface{}
 }
+
+func (s *S_UserProfile) ParseTimes() {
+	s.CreatedAtTime, _ = time.Parse(time.RFC3339, s.Created_at)
+	s.LastPostedAtTime, _ = time.Parse(time.RFC3339, s.Last_posted_at)
+	s.LastSeenAtTime, _ = time.Parse(time.RFC3339, s.Last_seen_at)
+}
+
 type S_Notification struct {
 	Notification_type int
 	Read              bool
@@ -122,6 +132,7 @@ type S_Notification struct {
 	Slug              string
 	Data              map[string]interface{}
 }
+
 func (s *S_Notification) ParseTimes() {
 	ts, err := time.Parse(time.RFC3339, s.Created_at)
 	if err != nil {
@@ -129,6 +140,7 @@ func (s *S_Notification) ParseTimes() {
 	}
 	s.Created_at_ts = ts
 }
+
 type S_PostAction struct {
 	Id      int
 	Count   int
