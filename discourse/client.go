@@ -76,7 +76,9 @@ func (bot *DiscourseSite) Login(config Config) (err error) {
 	err = bot.DGetJsonTyped("/session/current.json", &responseCurrent)
 	if err == nil {
 		if responseCurrent.Current_user.Username == config.Username {
-			log.Info("Already logged in")
+			log.Info("Already logged in as", config.Username)
+			go bot.PollNotifications(responseCurrent.Current_user.Id)
+			// bot.saveCookies()
 			return
 		}
 	}

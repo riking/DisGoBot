@@ -216,7 +216,9 @@ func (bot *DiscourseSite) loadCookies() error {
 	filename := bot.cookieFile()
 	file, err := os.Open(filename)
 	if err != nil {
-		file.Close()
+		if file != nil {
+			file.Close()
+		}
 		// cookies are empty, first run
 		return nil
 	}
@@ -224,35 +226,26 @@ func (bot *DiscourseSite) loadCookies() error {
 
 	// Load cookies
 	var cookies map[string][]http.Cookie
-	var sentinel int
 	dec := gob.NewDecoder(file)
 	err = dec.Decode(&cookies)
-	err2 := dec.Decode(&sentinel)
 
-	if err2 != nil {
-		log.Error("loading cookies:", err2)
-	}
-	if sentinel != 1 {
-		log.Error("sentinel value is not 1")
-	}
 
 	if err != nil {
 		log.Error("Could not restore cookies:", err)
 		return nil
 	}
-	fmt.Println(cookies)
 	if len(cookies) > 0 {
 		for domain, cookieSlice := range cookies {
 			u, urlErr := url.Parse(domain)
 			if urlErr != nil {
-				cPtrSlice := make([]*http.Cookie, len(cookieSlice))
-				for idx, val := range cookieSlice {
-					cPtrSlice[idx] = &val
-				}
-				bot.cookieJar.SetCookies(u, cPtrSlice)
-			} else {
-				log.Error(urlErr)
+				log.Error("Bad URL in cookie file", urlErr)
+				continue
 			}
+			cPtrSlice := make([]*http.Cookie, len(cookieSlice))
+			for idx, _ := range cookieSlice {
+				cPtrSlice[idx] = &cookieSlice[idx]
+			}
+			bot.cookieJar.SetCookies(u, cPtrSlice)
 		}
 		log.Info("Restored cookies.")
 	} else {
@@ -274,28 +267,26 @@ func (bot *DiscourseSite) saveCookies() error {
 	for _, domain := range bot.ListDomains() {
 		u, urlErr := url.Parse(domain)
 		if urlErr != nil {
-			cPtrAry := bot.cookieJar.Cookies(u)
-			cSlice := make([]http.Cookie, len(cPtrAry))
-			for idx, val := range cPtrAry {
-				cSlice[idx] = *val
-			}
-			cookies[domain] = cSlice
+			log.Error("Bad URL in bot.ListDomains()", urlErr)
+			continue
 		}
+		cPtrAry := bot.cookieJar.Cookies(u)
+		cSlice := make([]http.Cookie, len(cPtrAry))
+		for idx, val := range cPtrAry {
+			cSlice[idx] = *val
+		}
+		cookies[domain] = cSlice
 	}
 
 	enc := gob.NewEncoder(file)
-	fmt.Println(cookies)
+
 	err = enc.Encode(cookies)
-	err2 := enc.Encode(1)
-	err2 = enc.Encode(1)
+	enc.Encode(1)
 
 	if err != nil {
 		log.Error("Error saving cookies:", err)
 	} else {
 		log.Info("Saved cookies.")
-	}
-	if err2 != nil {
-		log.Error("saving cookies:", err2)
 	}
 	return nil
 }
