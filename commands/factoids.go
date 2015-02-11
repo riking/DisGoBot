@@ -31,7 +31,7 @@ type FactoidHandlerFunc func(redis.Conn, string, string, *discourse.S_Post, *dis
 type FactoidError string
 func (e FactoidError) Error() string { return string(e) }
 
-const rgxFactoidName = "[a-zA-z_][a-zA-Z0-9?!_-]*"
+const rgxFactoidName = "[a-zA-Z0-9?!_-]+"
 const rgxHandlerName = "[a-z]+"
 
 var remember_StripName = regexp.MustCompile("\\s+" + rgxFactoidName + "\\s+(.*)")
@@ -103,7 +103,7 @@ func cmdGetFactoid(extraArgs string, splitArgs []string, post *discourse.S_Post,
 	if err != nil {
 		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
 			`Factoid error: %s`, err))
-		log.Warn("Get fail:", err)
+		log.Warn("Factoid error:", err)
 		return
 	}
 
@@ -143,19 +143,37 @@ func doFactoid(conn redis.Conn,
 	return
 }
 
+/*
 func factoidHandlerReply(conn redis.Conn,
 	factoidRaw string,
 	factoidArgs string,
 	post *discourse.S_Post,
-	bot *discourse.DiscourseSite) (string, error) {
+	bot *discourse.DiscourseSite)
+*/
+
+func factoidHandlerReply(_ redis.Conn,
+	factoidRaw string,
+	_ string,
+	_ *discourse.S_Post,
+	_ *discourse.DiscourseSite) (string, error) {
 	return factoidRaw, nil
 }
 
+// any number of spaces, then non-spaces, then spaces again
+var patternFirstWord = regexp.MustCompile("\\s*(" + rgxFactoidName + ")\\s*")
 func factoidHandlerAlias(conn redis.Conn,
 	factoidRaw string,
-	factoidArgs string,
+	_ string,
 	post *discourse.S_Post,
 	bot *discourse.DiscourseSite) (string, error) {
 
-	
+	idxs := patternFirstWord.FindStringSubmatchIndex(factoidRaw)
+	if idxs == nil {
+		return "", FactoidError("Alias: Nothing specified to alias to, or not a valid factoid name")
+	}
+
+	aliasedFactoidName := factoidRaw[idxs[2]:idxs[3]]
+	aliasedFactoidArgs := factoidRaw[idxs[1]:]
+	// TODO catch infinite recursion
+	return doFactoid(conn, aliasedFactoidName, aliasedFactoidArgs, post, bot)
 }
