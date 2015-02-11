@@ -18,7 +18,7 @@ import (
 	log "github.com/riking/DisGoBot/logging"
 )
 
-const VERSION = "0.2"
+const VERSION = "0.3"
 const _LIKES_PER_DAY = 450
 
 type Config struct {

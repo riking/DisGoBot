@@ -22,7 +22,11 @@ type CommandContext struct {
 	redis        redis.Conn
 	// TODO
 	// Postgres  postgres.Conn
+
 	replyBuffer  []string
+
+	// A string buffer, to be used for recursion detection.
+	RecursionChain []string
 }
 
 func (cc *CommandContext) AddReply(text string) {
@@ -71,23 +75,39 @@ func HasCommand(commandName string) bool {
 	return found
 }
 
-func RunCommand(commandName string, extraArgs string, post discourse.S_Post, bot *discourse.DiscourseSite) {
-	log.Info("Processing command", commandName, "with args", extraArgs)
-	commandName = strings.ToLower(commandName)
-	splitArgs := strings.Split(extraArgs, " ")
+func RunCommandBatch(commandLines [][]string, post discourse.S_Post, bot *discourse.DiscourseSite) {
+	log.Info("Processing commands in post", post.Topic_id, post.Post_number, commandLines)
 
 	var context = CommandContext{
 		User: CredentialsFromPost(post),
 		Post: post,
 		Bot: bot,
-		replyBuffer: make([]string, 2),
+		replyBuffer: make([]string, 0),
 	}
 
-	CommandMap[commandName](extraArgs, splitArgs, &context)
+	for _, command := range commandLines {
+		log.Debug(command[1], "X", command[2])
+		if HasCommand(command[1]) {
+			RunCommand(command[1], command[2], &context)
+		} else {
+			log.Warn("No such command", command[1])
+		}
+	}
 
 	if context.redis != nil {
 		context.redis.Close()
 	}
+	if len(context.replyBuffer) > 0 {
+		bot.Reply(post.Topic_id, post.Post_number, strings.Join(context.replyBuffer, "\n\n"))
+	}
+}
+
+func RunCommand(commandName string, extraArgs string, context *CommandContext) {
+	log.Info("Processing command", commandName, "with args", extraArgs)
+	commandName = strings.ToLower(commandName)
+	splitArgs := strings.Split(extraArgs, " ")
+
+	CommandMap[commandName](extraArgs, splitArgs, context)
 }
 
 func help(extraArgs string, splitArgs []string, context *CommandContext) {

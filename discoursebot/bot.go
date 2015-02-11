@@ -92,17 +92,10 @@ func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
 }
 
 func CheckForCommand(post discourse.S_Post, bot *discourse.DiscourseSite) {
-//	log.Debug("Command processing. post raw:", post.Raw)
 	if mentionRegex.MatchString(post.Raw) {
 		parsed := mentionRegex.FindAllStringSubmatch(post.Raw, 10)
-//		log.Debug(len(parsed), "matches:", parsed)
-		log.Info("Processing commands in post", post.Topic_id, post.Post_number)
-		for _, matches := range parsed {
-			log.Debug(len(matches), "X", matches[1], "X", matches[2], "X")
-			if commands.HasCommand(matches[1]) {
-				commands.RunCommand(matches[1], matches[2], post, bot)
-			}
-		}
+
+		commands.RunCommandBatch(parsed, post, bot)
 	} else {
 		log.Debug("no match")
 	}
@@ -121,12 +114,12 @@ func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) 
 			log.Warn("got thread message without numeric post ID", id)
 			return
 		}
-//		bot.PostHappened <- true
 	}
 }
 
 func watchLatest(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
 	if msg.Data["message_type"] == "latest" {
+		log.Debug("post happened", msg)
 		bot.PostHappened <- true
 	}
 }

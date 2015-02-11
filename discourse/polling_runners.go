@@ -68,6 +68,12 @@ func (bot *DiscourseSite) pollMessageBus() {
 
 		positionLock.Lock()
 		for i := 0; i < len(list); i = i+2 {
+			// HACK
+			// do not restore /latest
+			if list[i] == "/latest" {
+				continue
+			}
+
 			n, err := strconv.Atoi(list[i + 1])
 			if n != 0 && err == nil {
 				messageBusPosition[list[i]] = n
