@@ -19,6 +19,7 @@ import (
 )
 
 const VERSION = "0.2"
+const _LIKES_PER_DAY = 450
 
 type Config struct {
 	Url       string
@@ -66,10 +67,10 @@ type DiscourseSite struct {
 	_sharedRedisConn     redis.Conn
 	_sharedRedisRefcount int
 	_sharedRedisLock     sync.Mutex
+	likeRateLimit        *DRateLimiter
 
 	// Channels
 	rateLimit        chan *http.Request
-	likeRateLimit    chan bool
 	onNotification   chan bool
 	messageBusResets chan string
 	PostHappened     chan bool
@@ -119,9 +120,9 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 		// casting to assure that I do want float multiply casted to int
 		IdleTimeout: time.Duration(int64(config.RedisTimeoutSecs * float64(time.Second))),
 	}
+	bot.likeRateLimit = NewDRateLimiter(_LIKES_PER_DAY, 24 * time.Hour)
 
 	bot.rateLimit = make(chan *http.Request)
-	bot.likeRateLimit = make(chan bool)
 	bot.onNotification = make(chan bool)
 	onNotification = bot.onNotification
 	bot.messageBusResets = make(chan string, 10) // TODO HACK HACK HACK
@@ -154,16 +155,6 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 			}
 		}
 	}()
-	go func() {
-		for {
-			for i := 0; i < (450/24); i++ {
-				<-bot.likeRateLimit
-			}
-			log.Warn("Exhausted hourly like limit")
-			time.Sleep(1 * time.Hour)
-		}
-	}()
-
 
 	return bot, nil
 }
@@ -180,6 +171,7 @@ func (bot *DiscourseSite) Start() {
 
 // A DiscourseSite instance is not safe to use after being destroyed.
 func (bot *DiscourseSite) Destroy() (err error) {
+	bot.likeRateLimit.Close()
 	err2 := bot.redisPool.Close()
 
 	if err2 != nil {

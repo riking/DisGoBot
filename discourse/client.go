@@ -114,7 +114,7 @@ func (bot *DiscourseSite) Login(config Config) (err error) {
 }
 
 func (d *DiscourseSite) LikePost(postId int) (err error) {
-	//	d.likeRateLimit <- true
+	d.likeRateLimit.Wait()
 	likeData := url.Values{}
 	likeData.Set("id", strconv.Itoa(postId))
 	likeData.Set("post_action_type_id", "2")

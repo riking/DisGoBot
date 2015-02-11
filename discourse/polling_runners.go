@@ -139,7 +139,7 @@ func (bot *DiscourseSite) pollMessageBus() {
 		}
 
 		if len(response) > 0 {
-			log.Debug("Message bus response", response)
+//			log.Debug("Message bus response", response)
 		}
 
 		// Dump into channel
