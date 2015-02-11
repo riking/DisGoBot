@@ -61,10 +61,6 @@ func main() {
 	// match2 extends until end of line
 	mentionRegex = regexp.MustCompile(fmt.Sprintf("(?i)!%s\\s+(\\S+)([^\n]*)", bot.Username))
 
-//	go LikesThread(bot)
-//	go GiveOutNicePosts(bot)
-//	bot.SubscribeNotificationPost(LikeSummon, []int{1})
-	bot.SubscribeNotificationPost(OnNotifiedPost, []int{1,2,3,4,5,6,7,8,9,10,11,12})
 	bot.Subscribe("/topic/1000", watchLikesThread)
 	bot.Subscribe("/latest", watchLatest)
 	bot.SubscribeEveryPost(OnPosted)
@@ -121,97 +117,5 @@ func watchLatest(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
 	if msg.Data["message_type"] == "latest" {
 		log.Debug("post happened", msg)
 		bot.PostHappened <- true
-	}
-}
-
-func OnNotifiedPost(notification discourse.S_Notification, post discourse.S_Post, bot *discourse.DiscourseSite) () {
-	log.Info("Got notification of type", discourse.NotificationTypesInverse[notification.Notification_type])
-	log.Info("Post is id", post.Id)
-	// TODO do something ?
-}
-
-func LikeSummon(notification discourse.S_Notification, post discourse.S_Post, bot *discourse.DiscourseSite) {
-	fmt.Println("LikeSummon got notification")
-	if post.Reply_to_post_number > 0 {
-		fmt.Println("liking post it is reply to")
-
-		var postToLike discourse.S_Post
-		err := bot.DGetJsonTyped(fmt.Sprintf("/posts/by_number/%d/%d", post.Topic_id, post.Reply_to_post_number), &postToLike)
-		if err != nil {
-			log.Error("LikeSummon - failed to load post", err)
-			return
-		}
-		err = bot.LikePost(postToLike.Id)
-		if err != nil {
-			log.Error("LikeSummon - liking post", err)
-			return
-		}
-	}
-}
-
-
-
-func GiveOutNicePosts(bot *discourse.DiscourseSite) {
-	// TODO dead code
-//	var highestSeen int = 0
-	regex := regexp.MustCompile("(?i)purple")
-
-	likePosts := func(post discourse.S_Post, bot *discourse.DiscourseSite) {
-		var err error
-		if post.Like_count == 9 {
-			err = bot.LikePost(post.Id)
-			fmt.Println("[INFO]", "Liked post id", post.Id, "which had", post.Like_count, "likes")
-
-			if _, ok := err.(discourse.ErrorRateLimit); ok {
-				fmt.Println("[WARN]", "Reached rate limit, sleeping 1 hour")
-				time.Sleep(1 * time.Hour)
-			} else if err != nil {
-				panic(err)
-			}
-		}
-		if regex.MatchString(post.Raw) {
-			err = bot.LikePost(post.Id)
-			fmt.Println("[INFO]", "Liked purple post with id", post.Id)
-			if _, ok := err.(discourse.ErrorRateLimit); ok {
-				fmt.Println("[WARN]", "Reached rate limit, sleeping 1 hour")
-				time.Sleep(1 * time.Hour)
-			} else if err != nil {
-				panic(err)
-			}
-		}
-	}
-	_ = likePosts
-
-}
-
-func LikesThread(bot *discourse.DiscourseSite) {
-	return
-	var response discourse.ResponseTopic
-	err := bot.DGetJsonTyped("/t/1000.json", &response)
-	if err != nil {
-		fmt.Println("[ERR]", err)
-		return
-	}
-	var highestLikedPost int = 12900
-	var highestLikedPostNumber int = 100
-	for idx, postId := range response.Post_stream.Stream {
-		if idx < highestLikedPostNumber {
-			continue
-		}
-		if postId < highestLikedPost {
-			continue
-		}
-		highestLikedPostNumber = idx
-		highestLikedPost = postId
-		err = bot.LikePost(postId)
-		fmt.Println("[INFO]", "Liked post id", postId, "in Likes thread (#", idx, ")")
-		time.Sleep(200 * time.Millisecond)
-
-		if _, ok := err.(discourse.ErrorRateLimit); ok {
-			fmt.Println("[WARN]", "Reached rate limit, sleeping 1 hour")
-			time.Sleep(1 * time.Hour)
-		} else if err != nil {
-			panic(err)
-		}
 	}
 }
