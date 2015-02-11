@@ -40,6 +40,9 @@ func setup() (bot *discourse.DiscourseSite, config discourse.Config) {
 	bot, err = discourse.NewDiscourseSite(config)
 	fatal("setting up bot", err)
 
+	err = bot.RefreshCSRF()
+	fatal("csrf", err)
+
 	err = bot.Login(config)
 	fatal("logging in", err)
 

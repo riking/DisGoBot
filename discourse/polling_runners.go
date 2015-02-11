@@ -207,7 +207,7 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 	for {
 		<-bot.onNotification
 		log.Info("Fetching notifications")
-		err := bot.DGetJsonTyped("/notifications.json", &response)
+		err := bot.DGetJsonTyped("/notifications.json?silent=true", &response)
 		if err != nil {
 			log.Error("Notifications error!", err)
 			time.Sleep(60 * time.Second)

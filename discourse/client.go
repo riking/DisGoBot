@@ -65,23 +65,33 @@ func (bot *DiscourseSite) SubscribeNotificationPost(callback NotifyWithPostCallb
 
 
 func (bot *DiscourseSite) Login(config Config) (err error) {
-	// TODO get /session/current.json
-	// 404 = logged out, 200 = logged in
-	err = bot.RefreshCSRF()
-	if err != nil {
-		return
+	var responseCurrent struct {
+			Current_user struct {
+				Id       int
+				Username string
+			}
+		}
+
+	// expected: ErrorBadJsonType
+	err = bot.DGetJsonTyped("/session/current.json", &responseCurrent)
+	if err == nil {
+		if responseCurrent.Current_user.Username == config.Username {
+			log.Info("Already logged in")
+			return
+		}
 	}
 
 	loginData := url.Values{}
 	loginData.Set("login", config.Username)
 	loginData.Set("password", config.Password)
-	response := ResponseUserSerializer{}
+	var response ResponseUserSerializer
 
 	err = bot.DPostJsonTyped("/session", loginData, &response)
 	if response.User.Username == config.Username {
 		log.Info("Logged in as", config.Username)
 		go bot.PollNotifications(response.User.Id)
 
+		bot.saveCookies()
 		return nil
 	}
 	if err != nil {
