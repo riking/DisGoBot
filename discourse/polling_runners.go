@@ -147,7 +147,7 @@ func (bot *DiscourseSite) pollMessageBus() {
 			messageChan <- msg
 		}
 
-		time.Sleep(3 * time.Second)
+		time.Sleep(1 * time.Second)
 
 		if func() bool {
 			positionLock.Lock()
@@ -369,7 +369,7 @@ func (bot *DiscourseSite) PollLatestPosts() {
 
 		select {
 		case <-bot.PostHappened:
-		case <-time.After(1 * time.Minute):
+		case <-time.After(10 * time.Minute):
 		}
 
 		log.Debug("Polling for latest posts")

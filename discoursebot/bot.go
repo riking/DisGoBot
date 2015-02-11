@@ -62,6 +62,7 @@ func main() {
 	bot.SubscribeNotificationPost(LikeSummon, []int{1})
 	bot.SubscribeNotificationPost(OnNotifiedPost, []int{1,2,3,4,5,6,7,8,9,10,11,12})
 	bot.Subscribe("/topic/1000", watchLikesThread)
+	bot.Subscribe("/latest", watchLatest)
 
 	callOnPosted(bot)
 
@@ -102,6 +103,12 @@ func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) 
 			log.Warn("got thread message without numeric post ID", id)
 			return
 		}
+//		bot.PostHappened <- true
+	}
+}
+
+func watchLatest(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
+	if msg.Data["message_type"] == "latest" {
 		bot.PostHappened <- true
 	}
 }
