@@ -137,9 +137,18 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 
 	// Feed ratelimit
 	go func() {
+		var req *http.Request
 		for {
-			time.Sleep(1 * time.Second)
-			req := <-bot.rateLimit
+			time.Sleep(3 * time.Second)
+			req = <-bot.rateLimit
+			if !messageBusUrlRegex.MatchString(req.URL.String()) {
+				log.Info("Made request to", req.URL)
+			}
+			req = <-bot.rateLimit
+			if !messageBusUrlRegex.MatchString(req.URL.String()) {
+				log.Info("Made request to", req.URL)
+			}
+			req = <-bot.rateLimit
 			if !messageBusUrlRegex.MatchString(req.URL.String()) {
 				log.Info("Made request to", req.URL)
 			}
