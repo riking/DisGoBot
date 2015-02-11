@@ -17,8 +17,7 @@ type notifyWPostSubscription struct {
 	types       []int
 }
 type notifyEveryPostSubscription struct {
-	channel     chan S_Post
-	filters     bool // TODO
+	callback    SeeEveryPostCallback
 }
 
 const (
@@ -67,10 +66,8 @@ func (bot *DiscourseSite) SubscribeNotificationPost(callback NotifyWithPostCallb
 }
 
 // TODO implement filters
-func (bot *DiscourseSite) SubscribeEveryPost(filters bool) (<-chan S_Post) {
-	returnChannel := make(chan S_Post)
-	bot.everyPostCallbacks = append(bot.everyPostCallbacks, notifyEveryPostSubscription{returnChannel, filters})
-	return returnChannel
+func (bot *DiscourseSite) SubscribeEveryPost(callback SeeEveryPostCallback) {
+	bot.everyPostCallbacks = append(bot.everyPostCallbacks, notifyEveryPostSubscription{callback})
 }
 
 

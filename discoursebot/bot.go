@@ -57,14 +57,17 @@ func main() {
 
 	bot, _ := setup()
 
+	// @BotName Match1 m a t c h 2
+	// match2 extends until end of line
+	mentionRegex = regexp.MustCompile(fmt.Sprintf("@%s\\s+(\\w+)\\s*((?:\\s+\\w+)*)\n", bot.Username))
+
 //	go LikesThread(bot)
 //	go GiveOutNicePosts(bot)
 	bot.SubscribeNotificationPost(LikeSummon, []int{1})
 	bot.SubscribeNotificationPost(OnNotifiedPost, []int{1,2,3,4,5,6,7,8,9,10,11,12})
 	bot.Subscribe("/topic/1000", watchLikesThread)
 	bot.Subscribe("/latest", watchLatest)
-
-	callOnPosted(bot)
+	bot.SubscribeEveryPost(OnPosted)
 
 	bot.Start()
 
@@ -72,23 +75,20 @@ func main() {
 	// TODO - command line control
 }
 
-func callOnPosted(bot *discourse.DiscourseSite) {
-	channel := bot.SubscribeEveryPost(false)
-	regex := regexp.MustCompile("Since likes don't have a lot of meaning in this topic")
+var regex = regexp.MustCompile("Since likes don't have a lot of meaning in this topic")
+var mentionRegex regexp.Regexp
+func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
+	log.Info("Got post with ID", post.Id)
 
-	go func(c <-chan discourse.S_Post) {
-		for post := range c {
-			log.Info("Got post with ID", post.Id)
-
-			if regex.MatchString(post.Raw) {
-				log.Info("Found meaningless post", post.Topic_id, "/", post.Post_number, "-", "liking")
-				bot.LikePost(post.Id)
-			} else if (post.Topic_id == 1000) {
-				log.Info("Liking likes thread post", post.Post_number)
-				bot.LikePost(post.Id)
-			}
-		}
-	}(channel)
+	if regex.MatchString(post.Raw) {
+		log.Info("Found meaningless post", post.Topic_id, "/", post.Post_number, "-", "liking")
+		bot.LikePost(post.Id)
+	} else if (post.Topic_id == 1000) {
+		log.Info("Liking likes thread post", post.Post_number)
+		bot.LikePost(post.Id)
+	} else if mentionRegex.MatchString(post.Raw) {
+		parsed = mentionRegex.FindAllStringSubmatch(post.Raw, -1)
+	}
 }
 
 func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {

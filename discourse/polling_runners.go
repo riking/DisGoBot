@@ -424,7 +424,7 @@ func _dispatchLatestPosts(postChan <-chan S_Post,
 		log.Debug(fmt.Sprintf("Dispatching post {id %d topic %d num %d}", post.Id, post.Topic_id, post.Post_number))
 		for _, handler := range bot.everyPostCallbacks {
 			// TODO filters, extra context (topic? category?)
-			handler.channel <- post
+			handler.callback(post, bot)
 		}
 	}
 }

@@ -51,6 +51,7 @@ type DiscourseSite struct {
 	// Config strings
 	baseUrl       string
 	name          string
+	Username      string
 
 	// Generated strings
 	clientId      string
