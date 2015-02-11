@@ -1,11 +1,11 @@
 package commands
 
 import (
-	//	"strconv"
-	"github.com/garyburd/redigo/redis"
+	// "strconv"
+	// "github.com/garyburd/redigo/redis"
 	"regexp"
 
-	"github.com/riking/DisGoBot/discourse"
+	// "github.com/riking/DisGoBot/discourse"
 	log "github.com/riking/DisGoBot/logging"
 	"fmt"
 )
@@ -30,7 +30,7 @@ func init() {
 }
 
 // First string is factoid raw, second string is arguments
-type FactoidHandlerFunc func(redis.Conn, string, string, *discourse.S_Post, *discourse.DiscourseSite) (string, error)
+type FactoidHandlerFunc func(string, string, *CommandContext) (string, error)
 type FactoidError string
 func (e FactoidError) Error() string { return string(e) }
 
@@ -42,13 +42,13 @@ var factoidPattern = regexp.MustCompile(rgxFactoidName)
 var handlerPattern = regexp.MustCompile("\\[(" + rgxHandlerName + ")\\]")
 
 
-func remember(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
+func remember(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
 	factoidName := splitArgs[1]
 
 	if !factoidPattern.MatchString(factoidName) {
-		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+		c.AddReply(fmt.Sprintf(
 				`Error: '%s' is not a valid factoid name.`, factoidName))
 		log.Warn("Remember fail: Factoid name is not alphanumeric.")
 		return
@@ -56,61 +56,57 @@ func remember(extraArgs string, splitArgs []string, post *discourse.S_Post, bot 
 
 	idxs := remember_StripName.FindStringSubmatchIndex(extraArgs)
 	if idxs == nil {
-		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+		c.AddReply(fmt.Sprintf(
 			`Error: Not enough arguments.`))
 		log.Warn("Remember fail: Not enough arguments.")
 		return // no match
 	}
 	factoidBody := extraArgs[idxs[2]:]
 
-	conn := bot.TakeUnsharedRedis()
-	defer conn.Close()
-	_, err = conn.Do("SET", fmt.Sprintf("disgobot:factoid:%s", factoidName), factoidBody)
+	_, err = c.Redis().Do("SET", fmt.Sprintf("disgobot:factoid:%s", factoidName), factoidBody)
 	if err != nil {
-		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+		c.AddReply(fmt.Sprintf(
 				`Redis error: %s`, err))
 		log.Warn("Remember fail: redis error:", err)
 		return
 	}
 
-	_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+	c.AddReply(fmt.Sprintf(
 			`Remembered '%s' as "%s".`, factoidName, factoidBody))
 	log.Warn(fmt.Sprintf(`Remembered '%s' as "%s".`, factoidName, factoidBody))
 }
 
-func forget(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
+func forget(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
 	factoidName := splitArgs[1]
 
 	if !factoidPattern.MatchString(factoidName) {
-		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+		c.AddReply(fmt.Sprintf(
 				`Error: '%s' is not a valid factoid name.`, factoidName))
 		log.Warn("Remember fail: Factoid name is not alphanumeric.")
 		return
 	}
 
-	conn := bot.TakeUnsharedRedis()
-	defer conn.Close()
-	_, err = conn.Do("DEL", fmt.Sprintf("disgobot:factoid:%s", factoidName))
+	_, err = c.Redis().Do("DEL", fmt.Sprintf("disgobot:factoid:%s", factoidName))
 	if err != nil {
-		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+		c.AddReply(fmt.Sprintf(
 				`Redis error: %s`, err))
 		log.Warn("Forget fail: redis error:", err)
 		return
 	}
 
-	_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+	c.AddReply(fmt.Sprintf(
 			`Forgot '%s'.`, factoidName))
 }
 
-func cmdGetFactoid(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
+func cmdGetFactoid(extraArgs string, splitArgs []string, c *CommandContext) {
 	var err error
 	// TODO get a more persistent store than Redis
 	factoidName := splitArgs[1]
 
 	if !factoidPattern.MatchString(factoidName) {
-		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+		c.AddReply(fmt.Sprintf(
 				`Error: '%s' is not a valid factoid name.`, factoidName))
 		log.Warn("Get fail: Factoid name is not alphanumeric.")
 		return
@@ -125,29 +121,25 @@ func cmdGetFactoid(extraArgs string, splitArgs []string, post *discourse.S_Post,
 	}
 
 	var response string
-	WithRedis(bot, func(conn redis.Conn) {
-			response, err = doFactoid(conn, factoidName, factoidArgs, post, bot)
-		})
+	response, err = doFactoid(factoidName, factoidArgs, c)
 
 	if err != nil {
-		_, _ = bot.Reply(post.Topic_id, post.Post_number, fmt.Sprintf(
+		c.AddReply(fmt.Sprintf(
 			`Factoid error: %s`, err))
 		log.Warn("Factoid error:", err)
 		return
 	}
 
-	_, err = bot.Reply(post.Topic_id, post.Post_number, response)
+	c.AddReply(response)
 }
 
-func doFactoid(conn redis.Conn,
-	factoidName string,
+func doFactoid(factoidName string,
 	factoidArgs string,
-	post *discourse.S_Post,
-	bot *discourse.DiscourseSite) (result string, err error) {
+	c *CommandContext) (result string, err error) {
 
 	var raw string
 
-	rawBytes, err := conn.Do("GET", fmt.Sprintf("disgobot:factoid:%s", factoidName))
+	rawBytes, err := c.Redis().Do("GET", fmt.Sprintf("disgobot:factoid:%s", factoidName))
 	if err != nil {
 		return "", err
 	}
@@ -165,7 +157,7 @@ func doFactoid(conn redis.Conn,
 		if !ok {
 			return "", FactoidError("Could not find handler called " + handlerName)
 		}
-		raw, err = handler(conn, raw[idxs[1]:], factoidArgs, post, bot)
+		raw, err = handler(raw[idxs[1]:], factoidArgs, c)
 	}
 
 	result = raw
@@ -180,21 +172,17 @@ func factoidHandlerReply(conn redis.Conn,
 	bot *discourse.DiscourseSite)
 */
 
-func factoidHandlerReply(_ redis.Conn,
-	factoidRaw string,
+func factoidHandlerReply(factoidRaw string,
 	_ string,
-	_ *discourse.S_Post,
-	_ *discourse.DiscourseSite) (string, error) {
+	_ *CommandContext) (string, error) {
 	return factoidRaw, nil
 }
 
 // any number of spaces, then non-spaces, then spaces again
 var patternFirstWord = regexp.MustCompile("\\s*(" + rgxFactoidName + ")\\s*")
-func factoidHandlerAlias(conn redis.Conn,
-	factoidRaw string,
+func factoidHandlerAlias(factoidRaw string,
 	_ string,
-	post *discourse.S_Post,
-	bot *discourse.DiscourseSite) (string, error) {
+	context *CommandContext) (string, error) {
 
 	idxs := patternFirstWord.FindStringSubmatchIndex(factoidRaw)
 	if idxs == nil {
@@ -204,5 +192,5 @@ func factoidHandlerAlias(conn redis.Conn,
 	aliasedFactoidName := factoidRaw[idxs[2]:idxs[3]]
 	aliasedFactoidArgs := factoidRaw[idxs[1]:]
 	// TODO catch infinite recursion
-	return doFactoid(conn, aliasedFactoidName, aliasedFactoidArgs, post, bot)
+	return doFactoid(aliasedFactoidName, aliasedFactoidArgs, context)
 }

@@ -100,7 +100,7 @@ func CheckForCommand(post discourse.S_Post, bot *discourse.DiscourseSite) {
 		for _, matches := range parsed {
 			log.Debug(len(matches), "X", matches[1], "X", matches[2], "X")
 			if commands.HasCommand(matches[1]) {
-				commands.RunCommand(matches[1], matches[2], &post, bot)
+				commands.RunCommand(matches[1], matches[2], post, bot)
 			}
 		}
 	} else {

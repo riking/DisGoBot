@@ -3,7 +3,7 @@ package commands
 import (
 	"strconv"
 
-	"github.com/riking/DisGoBot/discourse"
+	// "github.com/riking/DisGoBot/discourse"
 	log "github.com/riking/DisGoBot/logging"
 )
 
@@ -14,22 +14,22 @@ func init() {
 }
 
 
-func likeme(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
-	bot.LikePost(post.Id)
-	log.Info("liked post", post.Id, "by likeme command")
+func likeme(extraArgs string, splitArgs []string, c *CommandContext) {
+	c.Bot.LikePost(c.Post.Id)
+	log.Info("liked post", c.Post.Id, "by likeme command")
 }
 
 
-func likethat(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
-	repliedPost, err := bot.GetPostByNumber(post.Topic_id, post.Reply_to_post_number)
+func likethat(extraArgs string, splitArgs []string, c *CommandContext) {
+	repliedPost, err := c.Bot.GetPostByNumber(c.Post.Topic_id, c.Post.Reply_to_post_number)
 	if err == nil {
-		bot.LikePost(repliedPost.Id)
+		c.Bot.LikePost(repliedPost.Id)
 		log.Info("liked post", repliedPost.Id, "by likethat command")
 	}
 }
 
 
-func likepost(extraArgs string, splitArgs []string, post *discourse.S_Post, bot *discourse.DiscourseSite) {
+func likepost(extraArgs string, splitArgs []string, c *CommandContext) {
 	if len(splitArgs) < 3 {
 		return
 	}
@@ -41,10 +41,10 @@ func likepost(extraArgs string, splitArgs []string, post *discourse.S_Post, bot 
 	if err != nil {
 		return
 	}
-	postToLike, err := bot.GetPostByNumber(topicId, postNum)
+	postToLike, err := c.Bot.GetPostByNumber(topicId, postNum)
 	if err != nil {
 		return
 	}
-	bot.LikePost(postToLike.Id)
+	c.Bot.LikePost(postToLike.Id)
 	log.Info("liked post", postToLike.Id, "by likepost command")
 }
