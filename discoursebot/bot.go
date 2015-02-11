@@ -59,7 +59,7 @@ func main() {
 
 	// @BotName Match1 m a t c h 2
 	// match2 extends until end of line
-	mentionRegex = regexp.MustCompile(fmt.Sprintf("(?i)!%s\\s+(\\w+)\\s+((?:\\s+\\w+)*)?\n?", bot.Username))
+	mentionRegex = regexp.MustCompile(fmt.Sprintf("(?i)!%s\\s+(\\w+)((?:\\s+\\w+)*)?\n?", bot.Username))
 
 //	go LikesThread(bot)
 //	go GiveOutNicePosts(bot)
@@ -94,12 +94,14 @@ func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
 func CheckForCommand(post discourse.S_Post, bot *discourse.DiscourseSite) {
 	log.Debug("Command processing. post raw:", post.Raw)
 	if mentionRegex.MatchString(post.Raw) {
-		log.Debug("match")
-		matches := mentionRegex.FindStringSubmatch(post.Raw)
-		log.Debug(len(matches), "X", matches[1], "X", matches[2], "X")
-		if commands.HasCommand(matches[1]) {
-			log.Warn("found command in post", post.Id)
-			commands.RunCommand(matches[1], matches[2], post, bot)
+		parsed := mentionRegex.FindAllStringSubmatch(post.Raw, 10)
+		log.Debug(len(parsed), "matches:", parsed)
+		for _, matches := range parsed {
+			log.Debug(len(matches), "X", matches[1], "X", matches[2], "X")
+			if commands.HasCommand(matches[1]) {
+				log.Warn("found command in post", post.Id)
+				commands.RunCommand(matches[1], matches[2], post, bot)
+			}
 		}
 	} else {
 		log.Debug("no match")
