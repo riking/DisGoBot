@@ -10,6 +10,7 @@ import (
 	"os"
 	"crypto/rand"
 	"github.com/garyburd/redigo/redis"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -83,6 +84,8 @@ type DiscourseSite struct {
 // TODO this var is ugly
 var onNotification chan bool
 
+var messageBusUrlRegex = regexp.MustCompile(`/message-bus/`)
+
 func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot = new(DiscourseSite)
 
@@ -136,7 +139,9 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 		for {
 			time.Sleep(1 * time.Second)
 			req := <-bot.rateLimit
-			log.Info("Made request to", req.URL)
+			if !messageBusUrlRegex.MatchString(req.URL.String()) {
+				log.Info("Made request to", req.URL)
+			}
 		}
 	}()
 	go func() {
