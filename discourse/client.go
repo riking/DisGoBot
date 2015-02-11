@@ -8,11 +8,6 @@ import (
 	log "github.com/riking/DisGoBot/logging"
 )
 
-func (bot *DiscourseSite) Subscribe(channel string, callback MessageBusCallback) {
-	bot.messageBusCallbacks[channel] = callback
-	bot.messageBusResets <- channel
-}
-
 type notificationSubscription struct {
 	callback    NotificationCallback
 	types       []int
@@ -20,6 +15,10 @@ type notificationSubscription struct {
 type notifyWPostSubscription struct {
 	callback    NotifyWithPostCallback
 	types       []int
+}
+type notifyEveryPostSubscription struct {
+	channel     chan S_Post
+	filters     bool // TODO
 }
 
 const (
@@ -54,12 +53,24 @@ var NotificationTypes = map[string]int {
 
 var NotificationTypesInverse map[int]string
 
+func (bot *DiscourseSite) Subscribe(channel string, callback MessageBusCallback) {
+	bot.messageBusCallbacks[channel] = callback
+	bot.messageBusResets <- channel
+}
+
 func (bot *DiscourseSite) SubscribeNotification(callback NotificationCallback, notifyTypes []int) {
 	bot.notifyCallbacks = append(bot.notifyCallbacks, notificationSubscription{callback, notifyTypes})
 }
 
 func (bot *DiscourseSite) SubscribeNotificationPost(callback NotifyWithPostCallback, notifyTypes []int) {
 	bot.notifyPostCallbacks = append(bot.notifyPostCallbacks, notifyWPostSubscription{callback, notifyTypes})
+}
+
+// TODO implement filters
+func (bot *DiscourseSite) SubscribeEveryPost(filters bool) (<-chan S_Post) {
+	returnChannel := make(chan S_Post)
+	bot.everyPostCallbacks = append(bot.everyPostCallbacks, notifyEveryPostSubscription{returnChannel, filters})
+	return returnChannel
 }
 
 
@@ -72,13 +83,14 @@ func (bot *DiscourseSite) Login(config Config) (err error) {
 			}
 		}
 
-	// expected: ErrorBadJsonType
+	// expected: ErrorBadJsonType and 404
 	err = bot.DGetJsonTyped("/session/current.json", &responseCurrent)
 	if err == nil {
 		if responseCurrent.Current_user.Username == config.Username {
+
 			log.Info("Already logged in as", config.Username)
-			go bot.PollNotifications(responseCurrent.Current_user.Id)
-			// bot.saveCookies()
+			bot.userId = responseCurrent.Current_user.Id
+
 			return
 		}
 	}
@@ -90,10 +102,11 @@ func (bot *DiscourseSite) Login(config Config) (err error) {
 
 	err = bot.DPostJsonTyped("/session", loginData, &response)
 	if response.User.Username == config.Username {
-		log.Info("Logged in as", config.Username)
-		go bot.PollNotifications(response.User.Id)
 
+		log.Info("Logged in as", config.Username)
+		bot.userId = response.User.Id
 		bot.saveCookies()
+
 		return nil
 	}
 	if err != nil {

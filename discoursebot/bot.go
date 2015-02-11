@@ -61,10 +61,49 @@ func main() {
 //	go GiveOutNicePosts(bot)
 	bot.SubscribeNotificationPost(LikeSummon, []int{1})
 	bot.SubscribeNotificationPost(OnNotifiedPost, []int{1,2,3,4,5,6,7,8,9,10,11,12})
+	bot.Subscribe("/topic/1000", watchLikesThread)
 
-	discourse.OnNotification <- true
+	callOnPosted(bot)
+
+	bot.Start()
+
 	time.Sleep(9 * time.Hour)
 	// TODO - command line control
+}
+
+func callOnPosted(bot *discourse.DiscourseSite) {
+	channel := bot.SubscribeEveryPost(false)
+	regex := regexp.MustCompile("Since likes don't have a lot of meaning in this topic")
+
+	go func(c <-chan discourse.S_Post) {
+		for post := range c {
+			log.Info("Got post with ID", post.Id)
+
+			if regex.MatchString(post.Raw) {
+				log.Info("Found meaningless post", post.Topic_id, "/", post.Post_number, "-", "liking")
+				bot.LikePost(post.Id)
+			} else if (post.Topic_id == 1000) {
+				log.Info("Liking likes thread post", post.Post_number)
+				bot.LikePost(post.Id)
+			}
+		}
+	}(channel)
+}
+
+func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
+	if msg.Data["type"] == "created" {
+		id, ok := msg.Data["id"]
+		if !ok {
+			log.Warn("got thread message without post ID")
+			return
+		}
+		_, ok = id.(float64)
+		if !ok {
+			log.Warn("got thread message without numeric post ID", id)
+			return
+		}
+		bot.PostHappened <- true
+	}
 }
 
 func OnNotifiedPost(notification discourse.S_Notification, post discourse.S_Post, bot *discourse.DiscourseSite) () {
@@ -95,7 +134,8 @@ func LikeSummon(notification discourse.S_Notification, post discourse.S_Post, bo
 
 
 func GiveOutNicePosts(bot *discourse.DiscourseSite) {
-	var highestSeen int = 0
+	// TODO dead code
+//	var highestSeen int = 0
 	regex := regexp.MustCompile("(?i)purple")
 
 	likePosts := func(post discourse.S_Post, bot *discourse.DiscourseSite) {
@@ -122,16 +162,8 @@ func GiveOutNicePosts(bot *discourse.DiscourseSite) {
 			}
 		}
 	}
+	_ = likePosts
 
-	// highestSeen = SOME_VALUE // load from persistent store?
-	// TODO change change change!
-	func() {
-		discourse.SeeEveryPost(bot, &highestSeen, likePosts, 188682);
-		for {
-			discourse.SeeEveryPost(bot, &highestSeen, likePosts, 0);
-			time.Sleep(15 * time.Minute)
-		}
-	}()
 }
 
 func LikesThread(bot *discourse.DiscourseSite) {

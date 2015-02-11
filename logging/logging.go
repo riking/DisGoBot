@@ -2,8 +2,12 @@ package logging // import "github.com/riking/DisGoBot/logging"
 
 import "fmt"
 
+const DebugEnabled = true
+
 func Debug(args ...interface{}) {
-	fmt.Println(append([]interface{}{"[DBUG]"}, args...)...)
+	if DebugEnabled {
+		fmt.Println(append([]interface{}{"[DBUG]"}, args...)...)
+	}
 }
 func Info(args ...interface{}) {
 	fmt.Println(append([]interface{}{"[INFO]"}, args...)...)

@@ -11,6 +11,7 @@ import (
 
 	log "github.com/riking/DisGoBot/logging"
 )
+
 //import "reflect"
 
 type SeeEveryPostCallback func(S_Post, *DiscourseSite) ()
@@ -22,21 +23,23 @@ const MaxUint = ^uint(0)
 const MaxInt = int(MaxUint >> 1)
 
 const (
-	keyMessageBus = "disgobot:MessageBusStatus"
+	keyMessageBus  = "disgobot:MessageBusStatus"
+	keyHighestPost = "disgobot:HighestPostId"
 )
 
 func (bot *DiscourseSite) pollMessageBus() {
 	var postData url.Values = url.Values{}
 	var pollUrl string = fmt.Sprintf("/message-bus/%s/poll", bot.clientId)
 	var messageChan chan S_MessageBus = make(chan S_MessageBus)
+	// messageBusPosition and positionDirty are protected by positionLock
 	var messageBusPosition map[string]int = make(map[string]int)
+	var positionDirty bool = false
 	var positionLock sync.Mutex
-	var lastRedisSave time.Time = time.Now()
 
 	//	bot.messageBusCallbacks["/__status"] = updateChannels
 
 	// Dispatcher thread
-	go _dispatchMessageBus(messageChan, messageBusPosition, &positionLock, bot)
+	go _dispatchMessageBus(messageChan, messageBusPosition, &positionLock, &positionDirty, bot)
 	go _processResets(bot.messageBusResets, messageBusPosition, &positionLock)
 
 	restoreState := func(conn redis.Conn) {
@@ -70,6 +73,7 @@ func (bot *DiscourseSite) pollMessageBus() {
 
 	// Wait for registrations
 	for len(bot.messageBusCallbacks) == 0 {
+		log.Debug("waiting for message bus subscribers")
 		time.Sleep(1 * time.Second)
 	}
 	time.Sleep(1 * time.Second)
@@ -85,7 +89,12 @@ func (bot *DiscourseSite) pollMessageBus() {
 		for k, v := range messageBusPosition {
 			dataCopy[k] = strconv.Itoa(v)
 		}
+		positionDirty = false
 		positionLock.Unlock()
+
+		if len(dataCopy) == 0 {
+			return
+		}
 
 		for k, v := range dataCopy {
 			if err := conn.Send("HSET", keyMessageBus, k, v); err != nil {
@@ -103,6 +112,8 @@ func (bot *DiscourseSite) pollMessageBus() {
 		err := conn.Close()
 		if err != nil {
 			log.Error("Persisting message bus state to Redis:", err)
+		} else {
+			log.Info("Persisted message bus state to Redis")
 		}
 	}
 
@@ -112,6 +123,7 @@ func (bot *DiscourseSite) pollMessageBus() {
 		postData = url.Values{}
 		positionLock.Lock()
 		for channel, pos := range messageBusPosition {
+			// read and copy
 			postData.Set(channel, strconv.Itoa(pos))
 		}
 		positionLock.Unlock()
@@ -132,11 +144,14 @@ func (bot *DiscourseSite) pollMessageBus() {
 		for _, msg := range response {
 			messageChan <- msg
 		}
+
 		time.Sleep(3 * time.Second)
 
-		if lastRedisSave.Add(30 * time.Second).Before(time.Now()) {
-			log.Info("Persisting message bus to Redis")
-			lastRedisSave = time.Now()
+		if func() bool {
+			positionLock.Lock()
+			defer positionLock.Unlock()
+			return positionDirty
+		}() {
 			saveState()
 		}
 	}
@@ -145,14 +160,17 @@ func (bot *DiscourseSite) pollMessageBus() {
 func _dispatchMessageBus(messageChan chan S_MessageBus,
 	messageBusPosition map[string]int,
 	positionLock *sync.Mutex,
+	positionDirty *bool,
 	bot *DiscourseSite) {
 	for msg := range messageChan {
 		positionLock.Lock()
 		if msg.Channel != "/__status" {
 			messageBusPosition[msg.Channel] = msg.Message_Id
+			*positionDirty = true
 		} else {
 			for channel, pos := range msg.Data {
 				messageBusPosition[channel] = int(pos.(float64))
+				*positionDirty = true
 			}
 		}
 		positionLock.Unlock()
@@ -175,12 +193,6 @@ func _processResets(toReset chan string,
 	}
 }
 
-func notificationsChannel(msg S_MessageBus, bot *DiscourseSite) {
-	if msg.Data["total_unread_notifications"].(float64) > 0 {
-		bot.onNotification <- true
-	}
-}
-
 func contains(s []int, e int) bool {
 	for _, a := range s { if a == e { return true } }
 	return false
@@ -194,11 +206,7 @@ func (r ByCreatedAt) Less(j, i int) bool {
 	return r[i].Created_at_ts.Before(r[j].Created_at_ts)
 }
 
-// note: started from Login()
-func (bot *DiscourseSite) PollNotifications(userId int) {
-	busChannel := fmt.Sprintf("/notification/%d", userId)
-	bot.Subscribe(busChannel, notificationsChannel)
-
+func (bot *DiscourseSite) PollNotifications() {
 	var response ResponseNotifications
 	var post S_Post
 	var lastSeen time.Time = time.Unix(0, 0)
@@ -287,7 +295,138 @@ func (bot *DiscourseSite) PollNotifications(userId int) {
 	}
 }
 
-// TODO this is gahbage
+func notificationsChannel(msg S_MessageBus, bot *DiscourseSite) {
+	if msg.Data["total_unread_notifications"].(float64) > 0 {
+		bot.onNotification <- true
+	} else {
+		log.Debug("Ignoring superflous /notifications message id", msg.Message_Id)
+	}
+}
+
+func (bot *DiscourseSite) PollLatestPosts() {
+	var highestSeen int
+	var postChannel chan S_Post = make(chan S_Post)
+
+	restoreState := func() {
+		conn := bot.GetSharedRedis()
+		reply, err := conn.Do("GET", keyHighestPost)
+		bot.ReleaseSharedRedis(conn)
+		if err != nil {
+			log.Error("Restoring post polling state:", err)
+			return
+		}
+		if reply == nil {
+			log.Warn("No post polling state to restore")
+			return
+		}
+		if numStr, ok := reply.([]uint8); ok {
+			num, err := strconv.Atoi(string(numStr))
+			if err != nil {
+				log.Error("post polling restore error: not an integer", err)
+			} else {
+				highestSeen = num
+				log.Info("Restored post polling at post ID", highestSeen)
+			}
+		} else {
+			log.Error("Bad type in redis reply? (post polling)", reply)
+		}
+	}
+
+	saveState := func(highestSeen int) {
+		conn := bot.GetSharedRedis()
+		reply, err := conn.Do("SET", keyHighestPost, strconv.Itoa(highestSeen))
+		bot.ReleaseSharedRedis(conn)
+
+		if err != nil {
+			log.Error("Saving post polling state:", err)
+		}
+		if okStr, ok := reply.(string); ok && okStr == "OK" {
+			log.Info("Persisted post polling state in Redis")
+		} else {
+			log.Error("Bad type in redis reply? (post polling)", reply)
+		}
+	}
+	_ = saveState
+
+
+	restoreState()
+	go _dispatchLatestPosts(postChannel, bot)
+	if highestSeen == 0 {
+		_seen, err := _doFirstBatch(postChannel, bot)
+		if err != nil {
+			log.Error("!!!! Could not load first batch of posts - cancelling post polling")
+			return
+		}
+		highestSeen = _seen
+	}
+
+	for {
+		var response ResponseLatestPosts
+		var dirty = false
+
+		select {
+		case <-bot.PostHappened:
+		case <-time.After(1 * time.Minute):
+		}
+
+		log.Debug("Polling for latest posts")
+		err := bot.DGetJsonTyped(fmt.Sprintf("/posts.json?before=%d", highestSeen + 50), &response)
+		if err != nil {
+			log.Error("Error polling for latest posts:", err)
+			time.Sleep(1 * time.Minute)
+			continue
+		}
+
+		// reverse iterate
+		for i := len(response.Latest_posts) - 1; i >= 0; i-- {
+			post := response.Latest_posts[i]
+			if post.Id > highestSeen {
+				highestSeen = post.Id
+				dirty = true
+			}
+
+			postChannel <- post
+		}
+
+		if (dirty) {
+			saveState(highestSeen)
+		}
+	}
+}
+
+func _doFirstBatch(postChan chan<- S_Post, bot *DiscourseSite) (highestPost int, err error) {
+	var response ResponseLatestPosts
+
+	err = bot.DGetJsonTyped("/posts.json", &response)
+	if err != nil {
+		return -1, err
+	}
+
+	highestPost = 0
+	// reverse iterate
+	for i := len(response.Latest_posts) - 1; i >= 0; i-- {
+		post := response.Latest_posts[i]
+		if post.Id > highestPost {
+			highestPost = post.Id
+		}
+		postChan <- post
+	}
+	log.Debug("Highest post ID on first check was", highestPost)
+	return highestPost, nil
+}
+
+func _dispatchLatestPosts(postChan <-chan S_Post,
+	bot *DiscourseSite) {
+	for post := range postChan {
+		log.Debug(fmt.Sprintf("Dispatching post {id %d topic %d num %d}", post.Id, post.Topic_id, post.Post_number))
+		for _, handler := range bot.everyPostCallbacks {
+			// TODO filters, extra context (topic? category?)
+			handler.channel <- post
+		}
+	}
+}
+
+/*
 func SeeEveryPost(bot *DiscourseSite, highestSeen *int, callback SeeEveryPostCallback, onlyBelow int) {
 	var posts ResponseLatestPosts
 	var request string
@@ -328,3 +467,4 @@ func SeeEveryPost(bot *DiscourseSite, highestSeen *int, callback SeeEveryPostCal
 	}
 	*highestSeen = myHighest
 }
+*/

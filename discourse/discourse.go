@@ -55,6 +55,7 @@ type DiscourseSite struct {
 	// Generated strings
 	clientId      string
 	csrfToken     string
+	userId		  int
 
 	// Client objects
 	cookieJar            *cookiejar.Jar
@@ -69,15 +70,17 @@ type DiscourseSite struct {
 	likeRateLimit    chan bool
 	onNotification   chan bool
 	messageBusResets chan string
+	PostHappened     chan bool
 
 	// Callback holders
 	messageBusCallbacks   map[string]MessageBusCallback
 	notifyCallbacks       []notificationSubscription
 	notifyPostCallbacks   []notifyWPostSubscription
+	everyPostCallbacks    []notifyEveryPostSubscription
 }
 
 // TODO this var is ugly
-var OnNotification chan bool
+var onNotification chan bool
 
 func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot = new(DiscourseSite)
@@ -115,8 +118,9 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot.rateLimit = make(chan *http.Request)
 	bot.likeRateLimit = make(chan bool)
 	bot.onNotification = make(chan bool)
-	OnNotification = bot.onNotification
-	bot.messageBusResets = make(chan string)
+	onNotification = bot.onNotification
+	bot.messageBusResets = make(chan string, 10) // TODO HACK HACK HACK
+	bot.PostHappened = make(chan bool)
 
 	bot.messageBusCallbacks = make(map[string]MessageBusCallback)
 	bot.clientId = uuid()
@@ -144,9 +148,18 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 		}
 	}()
 
-	go bot.pollMessageBus()
 
 	return bot, nil
+}
+
+func (bot *DiscourseSite) Start() {
+	// all subscriptions must be before Start()... so insert one here
+	bot.Subscribe(fmt.Sprintf("/notification/%d", bot.userId), notificationsChannel)
+
+	go bot.pollMessageBus()
+	go bot.PollNotifications()
+	go bot.PollLatestPosts()
+	onNotification <- true
 }
 
 // A DiscourseSite instance is not safe to use after being destroyed.
