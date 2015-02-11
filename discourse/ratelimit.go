@@ -64,7 +64,7 @@ func (rl DRateLimiter) performed() {
 	if len(rl.slots) > 0 {
 		newest := rl.slots[0]
 		oldest := rl.slots[len(rl.slots) - 1]
-		if newest.Add(time.Duration(float64(rl.eventExpiry) * 2.02)).Before(time.Now()) {
+		if newest.Add(time.Duration(float64(rl.eventExpiry) * 2.04)).Before(time.Now()) {
 			// Ratelimit structure in Redis has expired. (2% margin)
 			// Dump the timestamps
 			rl.slots = make([]time.Time, 0, cap(rl.slots))
