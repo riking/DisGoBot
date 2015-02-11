@@ -80,8 +80,8 @@ func (rl DRateLimiter) performed() {
 
 	// Put now on the end
 	rl.slots = append(rl.slots, time.Now())
-	if len(rl.slots) == cap(rl.slots) {
+	if len(rl.slots) == cap(rl.slots) - 1 {
 		// Trim if full
-		rl.slots = rl.slots[1:len(rl.slots)]
+		rl.slots = rl.slots[1:]
 	}
 }

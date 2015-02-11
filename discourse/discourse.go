@@ -159,14 +159,19 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	return bot, nil
 }
 
-func (bot *DiscourseSite) Start() {
+func (bot *DiscourseSite) Start() error {
 	// all subscriptions must be before Start()... so insert one here
 	bot.Subscribe(fmt.Sprintf("/notification/%d", bot.userId), notificationsChannel)
 
+	if err := bot.TestRedis(); err != nil {
+		return err
+	}
 	go bot.pollMessageBus()
 	go bot.PollNotifications()
 	go bot.PollLatestPosts()
 	onNotification <- true
+
+	return nil
 }
 
 // A DiscourseSite instance is not safe to use after being destroyed.

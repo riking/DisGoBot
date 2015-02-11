@@ -27,6 +27,12 @@ const (
 	keyHighestPost = "disgobot:HighestPostId"
 )
 
+func (bot *DiscourseSite) TestRedis() error {
+	conn := bot.TakeUnsharedRedis()
+	_, err := conn.Do("PING")
+	return err
+}
+
 func (bot *DiscourseSite) pollMessageBus() {
 	var postData url.Values = url.Values{}
 	var pollUrl string = fmt.Sprintf("/message-bus/%s/poll", bot.clientId)
@@ -342,6 +348,7 @@ func (bot *DiscourseSite) PollLatestPosts() {
 
 		if err != nil {
 			log.Error("Saving post polling state:", err)
+			return
 		}
 		if okStr, ok := reply.(string); ok && okStr == "OK" {
 			log.Info("Persisted post polling state in Redis")
