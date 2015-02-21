@@ -390,10 +390,11 @@ func (bot *DiscourseSite) PollLatestPosts() {
 					c = false
 				}
 			}
+			log.Debug("Polling for latest posts (message bus)")
 		case <-time.After(10 * time.Minute):
+			log.Debug("Polling for latest posts (timeout)")
 		}
 
-		log.Debug("Polling for latest posts")
 		err := bot.DGetJsonTyped(fmt.Sprintf("/posts.json?before=%d", highestSeen+50), &response)
 		if err != nil {
 			log.Error("Error polling for latest posts:", err)
@@ -449,46 +450,3 @@ func _dispatchLatestPosts(postChan <-chan S_Post,
 		}
 	}
 }
-
-/*
-func SeeEveryPost(bot *DiscourseSite, highestSeen *int, callback SeeEveryPostCallback, onlyBelow int) {
-	var posts ResponseLatestPosts
-	var request string
-	var myHighest int = 0
-
-	lowestId := MaxInt
-	if onlyBelow > 0 {
-		lowestId = onlyBelow
-	}
-
-	for lowestId > *highestSeen {
-		if request == "" && onlyBelow <= 0 {
-			request = "/posts.json" // first loop
-		} else {
-			request = fmt.Sprintf("/posts.json?before=%d", lowestId)
-		}
-
-		err := bot.DGetJsonTyped(request, &posts)
-		if err != nil {
-			log.Error("failed to load /posts.json", err)
-			return
-		}
-
-
-		for _, post := range posts.Latest_posts {
-			if post.Id < lowestId && post.Id > *highestSeen {
-				callback(post, bot)
-			}
-			if post.Id > myHighest {
-				myHighest = post.Id
-			}
-		}
-		if lowestId == MaxInt {
-			lowestId = posts.Latest_posts[0].Id // not optimal
-		} else {
-			lowestId = lowestId-50
-		}
-	}
-	*highestSeen = myHighest
-}
-*/
