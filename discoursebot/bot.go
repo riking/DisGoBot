@@ -68,7 +68,7 @@ func main() {
 
 	fatal("Starting up", bot.Start())
 
-	time.Sleep(90000 * time.Hour)
+	select{}
 	// TODO - command line control
 }
 
