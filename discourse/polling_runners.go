@@ -381,6 +381,7 @@ func (bot *DiscourseSite) PollLatestPosts() {
 		var dirty = false
 
 		select {
+
 		case <-bot.PostHappened:
 			// Empty the channel
 			for c := true; c; {
@@ -391,8 +392,15 @@ func (bot *DiscourseSite) PollLatestPosts() {
 				}
 			}
 			log.Debug("Polling for latest posts (message bus)")
+
 		case <-time.After(10 * time.Minute):
 			log.Debug("Polling for latest posts (timeout)")
+
+		case <-bot.ResetPostIds:
+			log.Info("Resetting post IDs")
+			highestSeen = 0
+			highestSeen, _ = _doFirstBatch(nil, bot)
+			continue
 		}
 
 		err := bot.DGetJsonTyped(fmt.Sprintf("/posts.json?before=%d", highestSeen+50), &response)
@@ -405,6 +413,8 @@ func (bot *DiscourseSite) PollLatestPosts() {
 		// reverse iterate
 		for i := len(response.Latest_posts) - 1; i >= 0; i-- {
 			post := response.Latest_posts[i]
+			post.ParseTimes()
+
 			if post.Id > highestSeen {
 				highestSeen = post.Id
 				dirty = true
@@ -431,12 +441,15 @@ func _doFirstBatch(postChan chan <- S_Post, bot *DiscourseSite) (highestPost int
 	// reverse iterate
 	for i := len(response.Latest_posts) - 1; i >= 0; i-- {
 		post := response.Latest_posts[i]
+		post.ParseTimes()
 		if post.Id > highestPost {
 			highestPost = post.Id
 		}
-		postChan <- post
+		if postChan != nil {
+			postChan <- post
+		}
 	}
-	log.Debug("Highest post ID on first check was", highestPost)
+	log.Debug("Highest post ID on first batch was", highestPost)
 	return highestPost, nil
 }
 

@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"time"
-	"regexp"
+//	"regexp"
 	//	"reflect"
 	"os"
 
 	"github.com/riking/DisGoBot/discourse"
 	log "github.com/riking/DisGoBot/logging"
-	"github.com/riking/DisGoBot/commands"
+//	"github.com/riking/DisGoBot/commands"
 )
 
 var configFile string
@@ -57,14 +57,9 @@ func main() {
 
 	bot, _ := setup()
 
-	// @BotName Match1 m a t c h 2
-	// match2 extends until end of line
-	mentionRegex = regexp.MustCompile(fmt.Sprintf("(?i)!%s\\s+(\\S+)([^\n]*)", bot.Username))
-
-	bot.Subscribe("/topic/1000", watchLikesThread)
 	bot.Subscribe("/latest", watchLatest)
+	bot.Subscribe("/read-only", watchReadOnly)
 	bot.SubscribeEveryPost(OnPosted)
-	bot.SubscribeEveryPost(CheckForCommand)
 
 	fatal("Starting up", bot.Start())
 
@@ -72,63 +67,42 @@ func main() {
 	// TODO - command line control
 }
 
-var regex = regexp.MustCompile("Since likes don't have a lot of meaning in this topic")
-var mentionRegex *regexp.Regexp
+const ActionTypeTopic = 4
+const ActionTypePost = 5
+
 func OnPosted(post discourse.S_Post, bot *discourse.DiscourseSite) {
     // log.Info("OnPosted got post with ID", post.Id)
 	log.Debug(fmt.Sprintf("OnPosted got post {id %d topic %d num %d}", post.Id, post.Topic_id, post.Post_number))
 
-	if regex.MatchString(post.Raw) {
-		log.Info("Found meaningless post", post.Topic_id, "/", post.Post_number, "-", "liking")
-		bot.LikePost(post.Id)
-	} else if (post.Topic_id == 1000) {
-		actions := post.Actions_summary
-		for _, act := range actions {
-			if act.Id == 2 {
-				if act.Can_act {
-					log.Info("Liking likes thread post", post.Post_number)
-					bot.LikePost(post.Id)
-				} else {
-					log.Debug("Found already-liked likes thread post", post.Post_number)
-				}
-				break
+	if (post.Post_number == 1) {
+		var resp discourse.ResponseUserSerializer
+		err := bot.DGetJsonTyped(fmt.Sprintf("/users/%s.json", post.Username), &resp)
+		if err != nil {
+			return
+		}
+		postCount := 0
+		for _, v := range resp.User.Stats {
+			if v.Action_type == ActionTypePost || v.Action_type == ActionTypeTopic {
+				postCount += v.Count
 			}
 		}
-	} else {
-	}
-}
-
-func CheckForCommand(post discourse.S_Post, bot *discourse.DiscourseSite) {
-	if mentionRegex.MatchString(post.Raw) {
-		parsed := mentionRegex.FindAllStringSubmatch(post.Raw, 10)
-
-		go commands.RunCommandBatch(parsed, post, bot)
-	} else {
-		// log.Debug("no command found")
-	}
-
-}
-
-func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
-	if msg.Data["type"] == "created" {
-		id, ok := msg.Data["id"]
-		if !ok {
-			log.Warn("got thread message without post ID")
-			return
+		if postCount == 1 {
+			bot.Reply(post.Topic_id, post.Post_number, "Welcome to the try.discourse.org sandbox.\n\n" +
+				"Please remember that this website is a sandbox and the contents will be erased every day.")
 		}
-		idNum, ok := id.(float64)
-		if !ok {
-			log.Warn("got thread message without numeric post ID", id)
-			return
-		}
-		log.Info("Liking likes thread post", idNum)
-		bot.LikePost(int(idNum))
 	}
 }
 
 func watchLatest(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
 	if msg.Data["message_type"] == "latest" {
 		// log.Debug("post happened", msg)
-		bot.PostHappened <- true
+		bot.PostHappened <- struct{}{}
 	}
+}
+
+func watchReadOnly(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
+	go func() {
+		time.Sleep(5 * time.Minute)
+		bot.ResetPostIds <- struct{}{}
+	}()
 }

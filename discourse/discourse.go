@@ -74,7 +74,8 @@ type DiscourseSite struct {
 	postRateLimit    chan bool
 	onNotification   chan bool
 	messageBusResets chan string
-	PostHappened     chan bool
+	PostHappened     chan struct{}
+	ResetPostIds     chan struct{}
 
 	// Callback holders
 	messageBusCallbacks   map[string]MessageBusCallback
@@ -128,7 +129,8 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot.onNotification = make(chan bool)
 	onNotification = bot.onNotification
 	bot.messageBusResets = make(chan string, 10) // TODO HACK HACK HACK
-	bot.PostHappened = make(chan bool)
+	bot.PostHappened = make(chan struct{})
+	bot.ResetPostIds = make(chan struct{})
 
 	bot.messageBusCallbacks = make(map[string]MessageBusCallback)
 	bot.clientId = uuid()
@@ -179,10 +181,10 @@ func (bot *DiscourseSite) Start() error {
 		return err
 	}
 	go bot.pollMessageBus()
-	go bot.PollNotifications()
+	// go bot.PollNotifications()
 	go bot.PollLatestPosts()
-	onNotification <- true
-	bot.PostHappened <- true
+	// onNotification <- true
+	bot.PostHappened <- struct{}{}
 
 	return nil
 }

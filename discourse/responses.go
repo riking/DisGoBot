@@ -154,6 +154,7 @@ type S_Post struct {
 	Uploaded_avatar_id    int
 	Avatar_template       string
 	Created_at            string
+	CreatedAtTime         time.Time
 	Cooked                string
 	Post_number           int
 	Post_type             int
@@ -169,7 +170,6 @@ type S_Post struct {
 	Yours                 bool
 	Topic_id              int
 	Topic_slug            string
-	Topic_auto_close_at   string
 	Display_username      string
 	Primary_group_name    string
 	Version               int
@@ -192,6 +192,12 @@ type S_Post struct {
 	Can_view_edit_history bool
 	Wiki                  bool
 }
+
+func (s *S_Post) ParseTimes() {
+	s.CreatedAtTime, _ = time.Parse(time.RFC3339, s.Created_at)
+}
+
+
 type S_PostStream struct {
 	Posts  []S_Post
 	Stream []int
