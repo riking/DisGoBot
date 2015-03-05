@@ -71,10 +71,10 @@ type DiscourseSite struct {
 
 	// Channels
 	rateLimit        chan *http.Request
-	postRateLimit    chan bool
-	onNotification   chan bool
+	postRateLimit    chan struct{}
+	onNotification   chan struct{}
 	messageBusResets chan string
-	PostHappened     chan bool
+	PostHappened     chan struct{}
 
 	// Callback holders
 	messageBusCallbacks   map[string]MessageBusCallback
@@ -84,7 +84,7 @@ type DiscourseSite struct {
 }
 
 // TODO this var is ugly
-var onNotification chan bool
+var onNotification chan struct{}
 
 var messageBusUrlRegex = regexp.MustCompile(`/message-bus/`)
 
@@ -124,11 +124,11 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	bot.likeRateLimit = NewDRateLimiter(_LIKES_PER_DAY, 24 * time.Hour)
 
 	bot.rateLimit = make(chan *http.Request)
-	bot.postRateLimit = make(chan bool)
-	bot.onNotification = make(chan bool)
+	bot.postRateLimit = make(chan struct{})
+	bot.onNotification = make(chan struct{})
 	onNotification = bot.onNotification
 	bot.messageBusResets = make(chan string, 10) // TODO HACK HACK HACK
-	bot.PostHappened = make(chan bool)
+	bot.PostHappened = make(chan struct{})
 
 	bot.messageBusCallbacks = make(map[string]MessageBusCallback)
 	bot.clientId = uuid()
@@ -164,7 +164,7 @@ func NewDiscourseSite(config Config) (bot *DiscourseSite, err error) {
 	go func() {
 		for {
 			time.Sleep(5 * time.Second)
-			bot.postRateLimit <- true
+			bot.postRateLimit <- struct{}{}
 		}
 	}()
 
@@ -181,8 +181,8 @@ func (bot *DiscourseSite) Start() error {
 	go bot.pollMessageBus()
 	go bot.PollNotifications()
 	go bot.PollLatestPosts()
-	onNotification <- true
-	bot.PostHappened <- true
+	onNotification <- struct{}{}
+	bot.PostHappened <- struct{}{}
 
 	return nil
 }

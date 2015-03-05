@@ -312,7 +312,7 @@ func (bot *DiscourseSite) PollNotifications() {
 
 func notificationsChannel(msg S_MessageBus, bot *DiscourseSite) {
 	if msg.Data["total_unread_notifications"].(float64) > 0 {
-		bot.onNotification <- true
+		bot.onNotification <- struct{}{}
 	} else {
 		log.Debug("Ignoring superflous /notifications message id", msg.Message_Id)
 	}

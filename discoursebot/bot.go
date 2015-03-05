@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"time"
 	"regexp"
 	//	"reflect"
 	"os"
@@ -129,6 +128,6 @@ func watchLikesThread(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) 
 func watchLatest(msg discourse.S_MessageBus, bot *discourse.DiscourseSite) {
 	if msg.Data["message_type"] == "latest" {
 		// log.Debug("post happened", msg)
-		bot.PostHappened <- true
+		bot.PostHappened <- struct{}{}
 	}
 }
